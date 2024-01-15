@@ -18,8 +18,8 @@ npm run dev
 ```
 
 ## Instructions for syncing your MAL list with Sonarr
-1. Navigate to `http://localhost:5173`
-2. Fill out necessary environment variables
+1. Fill out necessary environment variables
+2. Navigate to `http://localhost:5173`
 3. Click the "Do OAuth" button
 4. Click the "Sync Watchlist" button
 5. Click the "Sync Sonarr With Mal" button
