@@ -17,6 +17,13 @@ npm install
 npm run dev
 ```
 
+## Instructions for syncing your MAL list with Sonarr
+1. Navigate to `http://localhost:5001`
+2. Fill out necessary environment variables
+3. Click the "Do OAuth" button
+4. Click the "Sync Watchlist" button
+5. Click the "Sync Sonarr With Mal" button
+
 ## Configuration
 The server will run on port 5001 by default. You can change this by setting the `PORT` environment variable.
 
@@ -32,8 +39,10 @@ MAL_PASSWORD: Your MAL password
 MAL_CLIENT_ID: Your MAL client ID
 MAL_CLIENT_SECRET: Your MAL client secret
 
-## Usage
-Once the server is running, you can navigate to `http://localhost:5001` and click the "Sync" button to sync your MAL list with Sonarr. This will add any shows you have marked as "Watching" on MAL to Sonarr and start searching for missing episodes.
+## TODO
+- [ ] add env vars for all Sonarr options for series. They are currently hardcoded
+- [ ] do check for existing series before adding
+- [ ] support for movies from MAL
 
 ## License
 MIT
