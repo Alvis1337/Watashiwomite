@@ -81,3 +81,13 @@ export const tvdbLogin = async (tvdbidApiKey) => {
             })
             .catch(error => console.error('Error:', error));
 }
+
+export const getSonarrAnimeList = async (sonarrApiKey) => {
+    return await
+            fetch('http://192.168.20.22:8989/api/series?apikey=' + sonarrApiKey)
+            .then(response => response.json())
+            .then(data => {
+                return data
+            })
+            .catch(error => console.error('Error:', error));
+}
