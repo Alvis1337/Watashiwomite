@@ -52,7 +52,7 @@ const Home = () => {
                 <Link target={'_blank'} to={link}>
                     <Button sx={{my: '2rem'}} variant={"contained"} color={"primary"}> Do OAUTH </Button>
                 </Link>
-                <Link  target={'_blank'} to={'https://localhost:5001/api/mal/get-watching'}>
+                <Link  target={'_blank'} to={'https://localhost:5001/api/mal/get-watching?username=alvisleet'}>
                 <Button sx={{my: '2rem'}} variant="contained" color="primary"> Sync watch list </Button>
                 </Link>
                 <Button onClick={() => {

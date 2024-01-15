@@ -1,26 +1,29 @@
 import mongoose from 'mongoose';
-import Joi from 'joi';
 const { Schema } = mongoose;
 
-const messageSchema = new Schema(
+const tokenSchema = new Schema(
     {
-        text: {
+        token: {
             type: String,
             required: true,
         },
+        username: {
+            type: String,
+            required: true,
+        }
     },
     { timestamps: true },
 );
 
-messageSchema.methods.toJSON = function () {
+tokenSchema.methods.toJSON = function () {
     return {
         id: this._id,
-        text: this.text,
+        token: this.token,
         createdAt: this.createdAt,
         updatedAt: this.updatedAt,
     };
 };
 
-const MalToken = mongoose.model('MalToken', messageSchema);
+const MalToken = mongoose.model('MalToken', tokenSchema);
 
 export default MalToken;
