@@ -1,3 +1,5 @@
+[![wakatime](https://wakatime.com/badge/user/75eea31e-013e-4c76-b26f-3e941e9e6acc/project/018d0b2b-74b2-45bd-b5e6-41eddbd5a4a4.svg)](https://wakatime.com/badge/user/75eea31e-013e-4c76-b26f-3e941e9e6acc/project/018d0b2b-74b2-45bd-b5e6-41eddbd5a4a4)
+
 # Watashiwomite (Watchme) [MERN]
 MAL integration for Sonarr that will grab all of shows you have marked as "Watching" on MAL and add them as a series to Sonarr and start searching for missing episodes.
 
