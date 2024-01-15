@@ -16,6 +16,7 @@ const tokenEndpoint = 'https://myanimelist.net/v1/oauth2/token';
 const tvdbidApiKey = 'baa9c9bf-c0c3-45e1-9487-6692be938529'
 
 router.get('/list_tokens', async (req, res) => {
+    res.header('Access-Control-Allow-Origin', '*');
     try {
         const tokenList = await MalToken.find().sort({createdAt: 'desc'});
 
@@ -189,7 +190,7 @@ router.get('/get-watching', async (req, res) => {
 });
 
 router.get('/sync-sonarr-with-mal', async (req, res) => {
-    async function getTvdbIds(animeList, token) {
+    async function getTvdbIds(animeList) {
         const tvdbIds = [];
 
         console.log('tvdbidApiKey:', tvdbidApiKey)

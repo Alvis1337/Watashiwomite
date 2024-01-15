@@ -1,7 +1,26 @@
 import {Grid} from "@mui/material";
 import Button from "@mui/material/Button";
+import {Link} from "react-router-dom";
+import {useEffect, useState} from "react";
+import {syncSonarrWithMal} from "../components/utils.ts";
 
 const Home = () => {
+    const [link, setLink] = useState("")
+    useEffect(() => {
+        fetch("https://localhost:5001/api/mal/step1", {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+       } )
+            .then(res => res.json())
+            .then(data => {
+                console.log(data)
+                setLink(data)
+            })
+    }, [])
+
+    // open links in new tabs
 
     return (
         <Grid container sx={{
@@ -30,9 +49,15 @@ const Home = () => {
                 p: '0px',
                 m: '0px',
             }}>
-                <Button sx={{my: '2rem'}} variant="contained" color="primary"> Sync Sonarr with Mal </Button>
-                <Button sx={{my: '2rem'}} variant="contained" color="primary"> Get Sonarr Anime List </Button>
-                <Button sx={{my: '2rem'}} variant={"contained"} color={"primary"}> Do OAUTH </Button>
+                <Link target={'_blank'} to={link}>
+                    <Button sx={{my: '2rem'}} variant={"contained"} color={"primary"}> Do OAUTH </Button>
+                </Link>
+                <Link  target={'_blank'} to={'https://localhost:5001/api/mal/get-watching'}>
+                <Button sx={{my: '2rem'}} variant="contained" color="primary"> Sync watch list </Button>
+                </Link>
+                <Button onClick={() => {
+                    syncSonarrWithMal('alvisleet');
+                }} sx={{my: '2rem'}} variant="contained" color="primary"> Sync Sonarr with Mal </Button>
             </Grid>
         </Grid>
     )
