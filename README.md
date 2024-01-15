@@ -11,6 +11,7 @@ npm run server
 ```
 
 ## Running the client
+### You do need mongodb on your system
 ```
 cd client
 npm install
