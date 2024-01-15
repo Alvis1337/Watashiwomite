@@ -20,7 +20,7 @@ export const addAnimeToSonarr = async (animeTitle, tvdbId) => {
         "seriesType": "Anime",
         "seasonFolder": 'true',
         "monitored": 'true',
-        "rootFolderPath": `/new_downloads/Anime/${animeTitle}`,
+        "rootFolderPath": `/new_downloads/Anime`,
         "addOptions": {
             "searchForMissingEpisodes": true,
         }
