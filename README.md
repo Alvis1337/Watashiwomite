@@ -40,7 +40,7 @@ MAL_CLIENT_ID: Your MAL client ID
 MAL_CLIENT_SECRET: Your MAL client secret
 
 ## TODO
-- [ ] add env vars for all Sonarr options for series. They are currently hardcoded
+- [ ] add env vars for all Sonarr options for series, they are currently hardcoded
 - [ ] do check for existing series before adding
 - [ ] support for movies from MAL
 
