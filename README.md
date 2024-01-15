@@ -46,3 +46,4 @@ MAL_CLIENT_SECRET: Your MAL client secret
 
 ## License
 MIT
+
