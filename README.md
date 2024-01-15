@@ -1,4 +1,4 @@
-# Watashiwomite (Watchme)
+# Watashiwomite (Watchme) [MERN]
 MAL integration for Sonarr that will grab all of shows you have marked as "Watching" on MAL and add them as a series to Sonarr and start searching for missing episodes.
 
 ## Running the server
