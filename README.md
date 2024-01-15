@@ -1,11 +1,18 @@
 # Watashiwomite (Watchme)
 MAL integration for Sonarr that will grab all of shows you have marked as "Watching" on MAL and add them as a series to Sonarr and start searching for missing episodes.
 
-## Installation
+## Running the server
 ```
 cd server
 npm install
 npm run server
+```
+
+## Running the client
+```
+cd client
+npm install
+npm run dev
 ```
 
 ## Configuration
