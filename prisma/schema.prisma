@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+model AnimeList {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  anime     Anime[]
+  sonarrSeries SonarrSeries[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Anime {
+  id                Int       @id @default(autoincrement())
+  malId             Int       @unique
+  title             String    @db.VarChar(255)
+  mainPictureMedium String?
+  mainPictureLarge  String?
+  status            String
+  score             Int?
+  numEpisodesWatched Int?
+  isRewatching      Boolean
+  updatedAtMAL      DateTime?
+  startDate         DateTime?
+  animeList         AnimeList @relation(fields: [animeListId], references: [id], onDelete: Cascade)
+  animeListId       Int
+}
+
+model SonarrSeries {
+  id                Int               @id @default(autoincrement())
+  title             String
+  alternateTitles   String[]
+  sortTitle         String
+  status            String
+  overview          String
+  previousAiring    DateTime?
+  network           String
+  airTime           String
+  images            Json
+  originalLanguage  String
+  seasons           Json
+  year              Int
+  path              String
+  qualityProfileId  Int
+  seasonFolder      Boolean
+  monitored         Boolean
+  monitorNewItems   String
+  useSceneNumbering Boolean
+  runtime           Int
+  tvdbId            Int
+  tvRageId          Int
+  tvMazeId          Int
+  tmdbId            Int
+  firstAired        DateTime
+  lastAired         DateTime
+  seriesType        String
+  cleanTitle        String
+  imdbId            String
+  titleSlug         String
+  rootFolderPath    String
+  certification     String
+  added             DateTime
+  ratings           Json
+  statistics        Json
+  languageProfileId Int
+  animeListId       Int
+  animeList         AnimeList @relation(fields: [animeListId], references: [id], onDelete: Cascade)
+  genres            SonarrSeriesGenre[]
+}
+
+model SonarrSeriesGenre {
+  id             Int      @id @default(autoincrement())
+  genre          String
+  sonarrSeriesId Int
+
+  sonarrSeries   SonarrSeries @relation(fields: [sonarrSeriesId], references: [id], onDelete: Cascade)
+
+  @@unique([genre, sonarrSeriesId])
+}
+
+
+model MalToken {
+  id           Int      @id @default(autoincrement())
+  token        String
+  refreshToken String
+  username     String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model OAuthState {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  codeVerifier String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
