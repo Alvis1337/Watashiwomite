@@ -17,7 +17,7 @@ const Hero = () => {
                 <Typography
                     variant="h1"
                     sx={{
-                        fontSize: { xs: '2.5rem', sm: '3rem', md: '4rem' }, // Responsive font size
+                        fontSize: { xs: '2.5rem', sm: '3rem', md: '4rem' },
                         fontWeight: 'bold',
                         marginBottom: 2,
                     }}
@@ -29,7 +29,7 @@ const Hero = () => {
                 <Typography
                     variant="h2"
                     sx={{
-                        fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' }, // Responsive font size
+                        fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' },
                         marginTop: 0,
                         marginBottom: 4,
                         lineHeight: 1.4,

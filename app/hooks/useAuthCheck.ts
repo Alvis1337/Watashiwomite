@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useAuth } from '../context/AuthContext'; // Adjust the import based on your file structure
+import { useAuth } from '../context/AuthContext';
 
 const useAuthCheck = () => {
     const { setAccessToken, isAuthenticated } = useAuth();

@@ -65,7 +65,6 @@ export async function GET(req: NextRequest) {
                 }
             });
 
-            // Set a cookie to indicate authentication
             const serializedCookie = serialize('authToken', tokenData.access_token, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
@@ -76,7 +75,6 @@ export async function GET(req: NextRequest) {
             const headers = new Headers();
             headers.append('Set-Cookie', serializedCookie);
 
-            // Redirect to the home page
             return NextResponse.redirect(new URL('/', req.url), { headers });
         } else {
             console.error('Token request failed:', tokenData);

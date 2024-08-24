@@ -4,13 +4,11 @@ import { serialize } from 'cookie';
 
 export async function GET(req: NextRequest) {
     try {
-        // Clear the authentication cookie
         const cookie = serialize('authToken', '', {
-            maxAge: -1, // Set the cookie to expire immediately
+            maxAge: -1, 
             path: '/',
         });
 
-        // Create a response to indicate successful logout
         return NextResponse.redirect(new URL('/', req.url), { headers: {
                 'Set-Cookie': cookie,
             },

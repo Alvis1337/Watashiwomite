@@ -6,13 +6,6 @@ const clientId = process.env.MAL_CLIENT_ID;
 const redirectUri = process.env.MAL_REDIRECT_URI;
 const authorizationEndpoint = 'https://myanimelist.net/v1/oauth2/authorize';
 
-function base64URLEncode(buffer: Buffer): string {
-    return buffer.toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, ''); // remove padding
-}
-
 function generateCodeVerifier(length: number = 64): string {
     return crypto.randomBytes(length).toString('base64url');
 }

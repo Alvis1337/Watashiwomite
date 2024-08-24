@@ -35,7 +35,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const logout = () => {
         Cookies.remove('accessToken');
         setAccessToken(null);
-        window.location.href = 'api/auth/logout'; // Adjust the URL as needed
+        window.location.href = 'api/auth/logout'; 
     };
 
     return (
