@@ -1,35 +1,51 @@
-import { tvdbLogin } from "./utils";
-
-interface Anime {
+export interface Anime {
     title: string;
 }
 
-export const getTvdbIds = async (animeList: Anime[], tvdbidApiKey: string) => {
-    const tvdbIds = [];
+interface AnimeSeries {
+    title: string;
+    tvdbId: string;
+  }
 
-    for (const animeTitle of animeList) {
-        try {
-            const tvdbToken = await tvdbLogin(tvdbidApiKey);
-            const searchUrl = 'https://api4.thetvdb.com/v4/search?query=' + animeTitle.title + '&type=series&limit=1';
-            const response = await fetch(searchUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + tvdbToken,
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-            });
-            const data = await response.json();
-            let tvdbId = data.data[0].id;
-            tvdbId = tvdbId.replace('series-', '');
-            tvdbIds.push({ title: animeTitle.title, tvdbId: tvdbId });
-        } catch (error: unknown) {
-            if (error instanceof Error) {
-                console.error(`Error fetching TVDB ID for ${animeTitle.title}: ${error.message}`);
-            } else {
-                console.error(`Unexpected error: ${String(error)}`);
-            }
+export const addAnimeToSonarr = async (
+    animeSeries: AnimeSeries[], 
+    rootFolder: string
+  ): Promise<void> => {
+    const sonarrUrl = `${process.env.SONARR_URL}/api/v3/series?apikey=${process.env.SONARR_API_KEY}`;
+  
+    for (const series of animeSeries) {
+      const sonarrRequestBody = {
+        tvdbId: series.tvdbId,
+        title: series.title,
+        qualityProfileId: 1, 
+        seriesType: 'standard',
+        seasonFolder: true,
+        monitored: true,
+        rootFolderPath: rootFolder,
+        addOptions: {
+          searchForMissingEpisodes: false,
+        },
+      };
+
+      try {
+        const response = await fetch(sonarrUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(sonarrRequestBody),
+        });
+  
+        if (!response.ok) {
+            const errorResponse = await response.json();
+            console.error(`Failed to add series: ${series.title}`, errorResponse);
+          } else {
+            const result = await response.json();
+            return result
+          }
+        } catch (error) {
+          console.error(`Error adding series: ${series.title}`, error);
         }
     }
-
-    return tvdbIds;
-}
+  };
+  
