@@ -15,5 +15,8 @@ TODO:
 - beautify readme
 - cleanup authcontext
 - swagger
+- containerize
+- create init page where you can type in vars and they get stored in db
+- load said vars from db
 
 Open [https://localhost:3000](https://localhost:3000) with your browser to see the result.
