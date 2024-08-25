@@ -31,18 +31,19 @@ model Anime {
   startDate         DateTime?
   animeList         AnimeList @relation(fields: [animeListId], references: [id], onDelete: Cascade)
   animeListId       Int
+  tvdbId            Int?      
 }
 
 model SonarrSeries {
   id                Int               @id @default(autoincrement())
   title             String
-  alternateTitles   String[]
+  alternateTitles   Json
   sortTitle         String
   status            String
   overview          String
   previousAiring    DateTime?
   network           String
-  airTime           String
+  airTime           String?
   images            Json
   originalLanguage  String
   seasons           Json
@@ -65,7 +66,7 @@ model SonarrSeries {
   imdbId            String
   titleSlug         String
   rootFolderPath    String
-  certification     String
+  certification     String?
   added             DateTime
   ratings           Json
   statistics        Json
@@ -73,6 +74,7 @@ model SonarrSeries {
   animeListId       Int
   animeList         AnimeList @relation(fields: [animeListId], references: [id], onDelete: Cascade)
   genres            SonarrSeriesGenre[]
+  malId             Int?       
 }
 
 model SonarrSeriesGenre {

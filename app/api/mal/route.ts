@@ -56,13 +56,13 @@ export async function GET(req: NextRequest) {
                     animeList: {
                         connect: { id: animeListObject?.id ?? -1 },
                     },
+                    tvdbId: null
                 },
             });
-
             updatedAnimeList.push(updatedAnime);
         }
 
-        return NextResponse.json({animeList: updatedAnimeList });
+        return NextResponse.json({animeList: updatedAnimeList }, { status: 200 });
     } catch (e) {
         console.error(e);
         return NextResponse.json({ message: 'An error occurred.' }, { status: 500 });

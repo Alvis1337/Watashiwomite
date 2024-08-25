@@ -8,4 +8,12 @@ First, run the development server:
 instructions to come
 ```
 
+TODO:
+- cleanup routing
+- convert utils.js to typescript
+- write instructions
+- beautify readme
+- cleanup authcontext
+- swagger
+
 Open [https://localhost:3000](https://localhost:3000) with your browser to see the result.

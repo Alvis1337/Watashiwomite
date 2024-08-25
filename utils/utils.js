@@ -1,5 +1,7 @@
 import prisma from '../lib/prisma';
 
+//TODO: convert it all to ts :o)
+
 export const getUsernameFromToken = async (token) => {
   const usernameUrl = 'https://api.myanimelist.net/v2/users/@me';
   const response = await fetch(usernameUrl, {
@@ -42,13 +44,13 @@ export const saveSonarrSeries = async (username, sonarrData) => {
         where: { id: series.id },
         update: {
           title: series.title,
-          alternateTitles: series.alternateTitles,
+          alternateTitles: series.alternateTitles ? series.alternateTitles : [''],
           sortTitle: series.sortTitle,
           status: series.status,
-          overview: series.overview,
+          overview: series.overview ? series.overview : 'None',
           previousAiring: series.previousAiring ? new Date(series.previousAiring) : null,
-          network: series.network,
-          airTime: series.airTime,
+          network: series.network ? series.network : 'None',
+          airTime: series.airTime ? series.airTime : null,
           images: {
             upsert: series.images.map(image => ({
               where: { url: image.url },
@@ -116,9 +118,9 @@ export const saveSonarrSeries = async (username, sonarrData) => {
           alternateTitles: series.alternateTitles,
           sortTitle: series.sortTitle,
           status: series.status,
-          overview: series.overview,
+          overview: series.overview ? series.overview : 'None',
           previousAiring: series.previousAiring ? new Date(series.previousAiring) : null,
-          network: series.network,
+          network: series.network ? series.network : 'None',
           airTime: series.airTime,
           images: {
             create: series.images.map(image => ({
@@ -152,7 +154,7 @@ export const saveSonarrSeries = async (username, sonarrData) => {
           lastAired: series.lastAired ? new Date(series.lastAired) : null,
           seriesType: series.seriesType,
           cleanTitle: series.cleanTitle,
-          imdbId: series.imdbId,
+          imdbId: series.imdbId ? series.imdbId : '0',
           titleSlug: series.titleSlug,
           rootFolderPath: series.rootFolderPath,
           certification: series.certification,
@@ -210,45 +212,56 @@ export const getTvdbIds = async (animeList, tvdbidApiKey) => {
   const tvdbIds = [];
   const tvdbToken = await tvdbLogin(tvdbidApiKey);
 
-  for (const animeTitle of animeList) {
-    try {
-      const searchUrl = `https://api4.thetvdb.com/v4/search?query=${encodeURIComponent(animeTitle)}`;
+  if (tvdbToken) {
+    for (const animeTitle of animeList) {
+      try {
+        const searchUrl = `https://api4.thetvdb.com/v4/search?query=${encodeURIComponent(animeTitle)}`;
 
-      const response = await fetch(searchUrl, {
-        method: 'GET',
-        headers: {
-          'accept': 'application/json',
-          'Authorization': 'Bearer ' + tvdbToken.data.token,
-        },
-      });
+        const response = await fetch(searchUrl, {
+          method: 'GET',
+          headers: {
+            'accept': 'application/json',
+            'Authorization': 'Bearer ' + tvdbToken.data.token,
+          },
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      const preferredSeries = data.data.find((entry) => 
-        entry.genres && (entry.genres.includes('Animation') || entry.genres.includes('Anime'))
-      );
+        // Find the preferred series
+        const preferredSeries = data.data.find((entry) =>
+          entry.genres &&
+          (entry.primary_type !== 'movie') &&
+          (entry.genres.includes('Anime') || entry.genres.includes('Animation')) &&
+          (entry.primary_language === 'jpn' || entry.primary_language === 'eng')
+        );
 
-      if (preferredSeries) {
-        let tvdbId = preferredSeries.id;
-        tvdbId = tvdbId.replace('series-', '');
-        tvdbIds.push({ title: animeTitle, tvdbId: tvdbId });
-      } else {
-        const firstAvailableSeries = data.data[0];
-        if (firstAvailableSeries) {
-          let tvdbId = firstAvailableSeries.id;
-          tvdbId = tvdbId.replace('series-', '');
+        // Default to the first available series if preferredSeries is not found
+        const firstAvailableSeries = data.data.find((entry) =>
+          entry.primary_type === 'series'
+        );
+
+        if (preferredSeries) {
+          const tvdbId = preferredSeries.id.replace('series-', '');
+          console.log(`Found preferred series for ${animeTitle} with id ${tvdbId}`);
+          tvdbIds.push({ title: animeTitle, tvdbId: tvdbId });
+        } else if (firstAvailableSeries) {
+          const tvdbId = firstAvailableSeries.id.replace(/^(series-|movie-)/, '');
+          console.log(`Found first available series for ${animeTitle} with id ${tvdbId}`);
           tvdbIds.push({ title: animeTitle, tvdbId: tvdbId });
         } else {
           console.warn(`No series found for ${animeTitle}`);
         }
-      }
 
-    } catch (error) {
-      console.error(`Error fetching TVDB ID for ${animeTitle}: ${error.message}`);
+      } catch (error) {
+        console.error(`Error fetching TVDB ID for ${animeTitle}: ${error.message}`);
+      }
     }
+  } else {
+    console.log('No TVDB token');
   }
 
   console.log(tvdbIds);
+
   return tvdbIds;
 }
 

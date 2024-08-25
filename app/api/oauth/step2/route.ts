@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
             const serializedCookie = serialize('authToken', tokenData.access_token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+                secure: process.env.NODE_ENV === 'production', 
                 maxAge: tokenData.expires_in,
                 path: '/'
             });
