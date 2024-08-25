@@ -1,5 +1,7 @@
 # MyAnimeList Integration for Sonarr
 
+> **Warning:** This application is currently in beta. Expect bugs and incomplete features. Use at your own risk.
+
 This project integrates [MyAnimeList](https://myanimelist.org/) with [Sonarr](https://sonarr.tv/), sort of.
 
 ![Project Screenshot](assets/screenshot.png)
@@ -30,6 +32,10 @@ npx prisma migrate dev
 npm run dev-https
 ```
 Open your browser to https://localhost:3000
+
+## App instructions
+1. Enter username into textbox and click the two buttons
+2. Wait for the sync to complete and check results
 
 
 TODO:
