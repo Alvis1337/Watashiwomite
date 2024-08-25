@@ -1,22 +1,44 @@
-This is a [MyAnimeList](https://myanimelist.org/) integration for [`Sonarr`](https://sonarr.tv/).
+# MyAnimeList Integration for Sonarr
+
+This project integrates [MyAnimeList](https://myanimelist.org/) with [Sonarr](https://sonarr.tv/), sort of.
+
+![Project Screenshot](assets/screenshot.png)
 
 ## Getting Started
+Ensure you're using at least v21.0.0
 
-First, run the development server:
-
+1. Clone the repository
 ```bash
-instructions to come
+cd path/to/clone-directory
 ```
+2. Install Dependencies
+```bash
+npm install
+```
+3. Set Up Environment Variables
+- Copy the example environment file and update the values in .env:
+```bash
+cp .env.example .env
+```
+4. Run prisma migrations
+```
+npx prisma migrate dev
+```
+5. Start the development server
+- Run the Next.js server with HTTPS enabled (experimental):
+```
+npm run dev-https
+```
+Open your browser to https://localhost:3000
+
 
 TODO:
 - cleanup routing
-- convert utils.js to typescript
-- write instructions
-- beautify readme
-- cleanup authcontext
-- swagger
-- containerize
-- create init page where you can type in vars and they get stored in db
-- load said vars from db
-
-Open [https://localhost:3000](https://localhost:3000) with your browser to see the result.
+- Convert `utils.js` to TypeScript
+- Write comprehensive instructions
+- Beautify the README
+- Clean up AuthContext
+- Implement Swagger documentation
+- Containerize the application
+- Create an initialization page to input and store variables in the database
+- Load variables from the database
