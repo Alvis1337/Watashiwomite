@@ -6,7 +6,24 @@ This project integrates [MyAnimeList](https://myanimelist.org/) with [Sonarr](ht
 
 ![Project Screenshot](assets/screenshot.png)
 
+## Project requirements
+### API Keys
+1. Sonarr API Key
+    -  **Description**: Key for authenticating with the Sonarr API.
+    - **How to Obtain**: Log in to Sonarr, navigate to Settings > General, and find or generate your API key.
+2. MyAnimeList API Key
+    -  **Description**: Key for accessing the MyAnimeList API.
+    - **How to Obtain**: Register your application on the [MyAnimeList Developer Portal](https://myanimelist.net/apiconfig) and obtain your API key.
+3. TVDB API Key
+    -  **Description**: Key for accessing the TVDB API to retrieve TVDB IDs.
+    - **How to Obtain**: Register an account and go to their [api info page](https://thetvdb.com/api-information). You will get a key after filling out the form.
+### Dependencies
+- Node.js
+- Postgres
+- npm
+
 ## Getting Started
+### Running the app
 Ensure you're using at least v21.0.0
 
 1. Clone the repository
