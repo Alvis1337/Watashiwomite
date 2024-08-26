@@ -70,5 +70,5 @@ TODO:
 - Containerize the application
 - Create an initialization page to input and store variables in the database
 - Load variables from the database
-- Add toggle `forsearchForMissingEpisodes`
+- Add toggle for `searchForMissingEpisodes`
 - Allow user to select what list from MAL they want to pull anime from
