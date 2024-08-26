@@ -4,7 +4,7 @@
 > [!WARNING] 
 > This application is currently in beta. Expect bugs and incomplete features. Use at your own risk. :shipit:
 
-This project integrates [MyAnimeList](https://myanimelist.org/) with [Sonarr](https://sonarr.tv/), sort of.
+This project integrates [MyAnimeList](https://myanimelist.org/) with [Sonarr](https://sonarr.tv/), sort of. By default, it will look for anything that you have on your "Now Watching" watch list on MAL and if it TVDB says it is a series that has a genre of Anime or Animation, it will grab its TVDBID and send that to Sonarr. The biggest thing here is that we are giving Sonarr shows a `malId` that allows us to make corellations. It currently DOES NOT start searching immediately for said shows by default. If you want to enable that, you need to change the `searchForMissingEpisodes: false` to true in the `addAnimeToSonarr` function in `updatedUtils.ts`. I refuse to turn this on by default. Please report any issues/feature requests and lets extend this to all anime lists!
 
 ![Project Screenshot](assets/screenshot.png)
 
@@ -70,3 +70,5 @@ TODO:
 - Containerize the application
 - Create an initialization page to input and store variables in the database
 - Load variables from the database
+- Add toggle `forsearchForMissingEpisodes`
+- Allow user to select what list from MAL they want to pull anime from
