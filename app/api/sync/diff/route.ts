@@ -92,7 +92,17 @@ import { addAnimeToSonarr } from "@/utils/updatedUtils";
  *               properties:
  *                 message:
  *                   type: string
- *                   example: 'Username is required.' or 'Your Sonarr is out of sync, please resolve manually'
+ *                   example: 'Username is required.'
+ *       '401':
+ *         description: Bad Request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 'Your Sonarr is out of sync, please resolve manually.'
  *       '500':
  *         description: Internal Server Error
  *         content:
@@ -262,7 +272,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (uniqueToSonarr.length > 0) {
-        return NextResponse.json({ message: 'Your Sonarr is out of sync, please resolve manually' }, { status: 400 });
+        return NextResponse.json({ message: 'Your Sonarr is out of sync, please resolve manually' }, { status: 401 });
     }
 
     if (uniqueToMal.length === 0 && uniqueToSonarr.length === 0) {
