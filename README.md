@@ -1,6 +1,8 @@
 # MyAnimeList Integration for Sonarr
 
-> **Warning:** This application is currently in beta. Expect bugs and incomplete features. Use at your own risk.
+
+> [!WARNING] 
+> This application is currently in beta. Expect bugs and incomplete features. Use at your own risk. :shipit:
 
 This project integrates [MyAnimeList](https://myanimelist.org/) with [Sonarr](https://sonarr.tv/), sort of.
 
