@@ -18,16 +18,16 @@ This project integrates [MyAnimeList](https://myanimelist.org/) with [Sonarr](ht
     -  **Description**: Key for accessing the TVDB API to retrieve TVDB IDs.
     - **How to Obtain**: Register an account and go to their [api info page](https://thetvdb.com/api-information). You will get a key after filling out the form.
 ### Dependencies
-- Node.js
+- Node.js >= 21.0.0
 - Postgres
 - npm
 
 ## Getting Started
 ### Running the app
-Ensure you're using at least v21.0.0
 
 1. Clone the repository
 ```bash
+git clone <repository-url>
 cd path/to/clone-directory
 ```
 2. Install Dependencies
@@ -50,18 +50,21 @@ npm run dev-https
 ```
 Open your browser to https://localhost:3000
 
+## API Docuentation
+- **Swagger Documentation**: The project includes Swagger for API documentation. You can access it at https://localhost:3000/api-doc. This provides interactive documentation of the API endpoints and their usage.
+
 ## App instructions
 1. Enter username into textbox and click the two buttons
-2. Wait for the sync to complete and check results
+2. Wait for the synchronization to complete and check the results.
 
 
 TODO:
 - cleanup routing
 - Convert `utils.js` to TypeScript
-- Write comprehensive instructions
-- Beautify the README
+- ~~Write comprehensive instructions~~
+- ~~Beautify the README~~
 - Clean up AuthContext
-- Implement Swagger documentation
+- ~~Implement Swagger documentation~~
 - Containerize the application
 - Create an initialization page to input and store variables in the database
 - Load variables from the database

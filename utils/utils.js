@@ -260,8 +260,6 @@ export const getTvdbIds = async (animeList, tvdbidApiKey) => {
     console.log('No TVDB token');
   }
 
-  console.log(tvdbIds);
-
   return tvdbIds;
 }
 

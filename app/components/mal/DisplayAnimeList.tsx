@@ -7,7 +7,6 @@ interface AnimeListData {
 }
 
 const DisplayAnimeList: React.FC<AnimeListData> = ({ animeList, sonarrList }) => {
-    console.log(sonarrList)
     const sonarrMap = new Map<number, SonarrSeries>();
     if (Array.isArray(sonarrList)) {
         sonarrList.forEach(series => {

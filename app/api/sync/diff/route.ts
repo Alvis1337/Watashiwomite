@@ -3,6 +3,109 @@ import prisma from '../../../../lib/prisma';
 import { getTvdbIds, getSonarrRootFolder } from "@/utils/utils";
 import { addAnimeToSonarr } from "@/utils/updatedUtils";
 
+/**
+ * @swagger
+ * tags:
+ *   name: Sync
+ *   description: Operations for syncing MAL and Sonarr lists
+ */
+
+/**
+ * @swagger
+ * /api/sync/diff:
+ *   get:
+ *     summary: Sync MAL and Sonarr lists and return differences
+ *     description: Syncs the anime lists between MyAnimeList (MAL) and Sonarr, and returns any differences. Optionally fetches additional TVDB IDs for new MAL entries and adds them to Sonarr.
+ *     tags: [Sync]
+ *     parameters:
+ *       - name: username
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *           description: The username for the MAL account.
+ *       - name: diff
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - true
+ *             - false
+ *           description: If 'true', returns the difference between MAL and Sonarr lists. If 'false' or omitted, performs the sync operation.
+ *     responses:
+ *       '200':
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: number
+ *                           title:
+ *                             type: string
+ *                       description: List of results from adding new anime to Sonarr (only included if diff is false).
+ *                     diff:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       description: List of anime titles unique to MAL (only included if diff is true or no changes detected).
+ *                     lists:
+ *                       type: object
+ *                       properties:
+ *                         mal:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                           description: List of anime titles from MAL.
+ *                         sonarr:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               id:
+ *                                 type: number
+ *                               titles:
+ *                                 type: array
+ *                                 items:
+ *                                   type: string
+ *                             description: List of Sonarr series with their alternate titles.
+ *                       description: Lists of anime from MAL and Sonarr.
+ *       '400':
+ *         description: Bad Request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 'Username is required.' or 'Your Sonarr is out of sync, please resolve manually'
+ *       '500':
+ *         description: Internal Server Error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 'TVDB API key is missing.'
+ */
+
+
 export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const username = url.searchParams.get('username');
