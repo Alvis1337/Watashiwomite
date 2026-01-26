@@ -1,9 +1,21 @@
-"use client"
+"use client";
+
 import { useAuth } from '../context/AuthContext';
-import { useState, useEffect } from 'react';
-import { Grid, Typography, Card, CardContent, CardMedia, Button, CardActionArea, CardActions } from '@mui/material';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+    Typography,
+    Box,
+    CircularProgress,
+} from '@mui/material';
+import Grid2 from '@mui/material/Grid2';
 import DisplayAnimeList from './mal/DisplayAnimeList';
+import DashboardHero from './dashboard/DashboardHero';
+import DashboardLayout from './dashboard/DashboardLayout';
+import SyncSettingsCard from './dashboard/SyncSettingsCard';
+import { UnsyncDialog, SyncResultsDialog } from './dashboard/SyncDialogs';
 import { Anime, SonarrSeries } from '../../types/interfaces';
+import { toast } from 'react-hot-toast';
+import { usePreferences } from '../hooks/usePreferences';
 
 interface UserData {
     id: number;
@@ -17,163 +29,321 @@ interface UserData {
 const Dashboard = () => {
     const [userAnimeList, setUserAnimeList] = useState<Anime[]>()
     const [userSonarrList, setUserSonarrList] = useState<SonarrSeries[]>();
-    const { setAccessToken, logout } = useAuth();
-    const [synced, setSynced] = useState(false);
+    const { logout } = useAuth();
     const [syncLoading, setSyncLoading] = useState(false);
     const [userData, setUser] = useState<UserData>();
-    const [animeListLoading, setAnimeListLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [syncResults, setSyncResults] = useState<{title: string, success: boolean, reason?: string}[] | null>(null);
+    const [showSyncResults, setShowSyncResults] = useState(false);
+    const [showUnsyncDialog, setShowUnsyncDialog] = useState(false);
+    const [unsyncedAnime, setUnsyncedAnime] = useState<Anime[]>([]);
+    const [unsyncedListNames, setUnsyncedListNames] = useState<string[]>([]);
+
+    const {
+        preferences: selectedLists,
+        previousPreferences: previousLists,
+        loaded: preferencesLoaded,
+        saving: preferencesSaving,
+        updatePreferences,
+        commitChanges: commitPreferenceChanges,
+    } = usePreferences({
+        username: userData?.name,
+        enabled: !!userData,
+    });
+
+    const dataLoadedRef = useRef(false);
 
     useEffect(() => {
+        let mounted = true;
+
         async function checkAuth() {
-            const response = await fetch('/api/auth/check');
-            const data = await response.json();
-            if (data.isAuthenticated) {
-                setUser(data.user);
-            } else {
-                setUser({
-                    id: 1,
-                    name: '',
-                    location: '',
-                    joined_at: '',
-                    picture: '',
-                    authToken: ''
-                });
+            try {
+                setLoading(true);
+                const response = await fetch('/api/auth/check');
+                const data = await response.json();
+
+                if (!mounted) return;
+
+                if (data.isAuthenticated && data.user) {
+                    setUser(data.user);
+                } else {
+                    console.error('[Dashboard] Not authenticated');
+                }
+            } catch (error) {
+                console.error('[Dashboard] Auth check failed:', error);
+            } finally {
+                if (mounted) {
+                    setLoading(false);
+                }
             }
         }
 
         checkAuth();
-    }, [setAccessToken]);
 
-    async function checkAnimeList(username: string) {
-        const response = await fetch(`/api/mal?username=${username}`)
-        const data = await response.json();
-        if (data) {
-            setUserAnimeList(data.animeList)
-            setAnimeListLoading(true)
-        } else {
-            return console.log(data)
-        }
-    }
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
-    async function checkSonarrList(username: string) {
-        const response = await fetch(`/api/sonarr/database?username=${username}`)
-        const data = await response.json();
-        if (data) {
-            setUserSonarrList(data.series)
-        } else {
-            return console.log('no data in sonarr response')
-        }
-    }
-
-    const syncMalWithSonarr = async (username: string) => {
-        setSyncLoading(true)
+    const checkAnimeList = useCallback(async (username: string) => {
         try {
-            const response = await fetch(`/api/sync/diff?username=${username}`)
+            const response = await fetch(`/api/mal?username=${username}`)
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data?.animeList) {
+                setUserAnimeList(data.animeList);
+            }
+        } catch (error) {
+            console.error('[Dashboard] Failed to fetch anime list:', error);
+            toast.error('Failed to load your anime list');
+        }
+    }, []);
+
+    const checkSonarrList = useCallback(async (username: string) => {
+        try {
+            const response = await fetch(`/api/sonarr/database?username=${username}`)
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data && data.series) {
+                setUserSonarrList(data.series);
+            }
+        } catch (error) {
+            console.error('[Dashboard] Failed to fetch Sonarr list:', error);
+            toast.error('Failed to load Sonarr series');
+        }
+    }, []);
+
+    const performSync = useCallback(async (username: string, removeFromSonarr: boolean = false) => {
+        setSyncLoading(true)
+        setSyncResults(null);
+        const toastId = toast.loading('Syncing your anime lists...');
+        try {
+            const url = `/api/sync/diff?username=${username}${removeFromSonarr ? '&removeUnsynced=true' : ''}`;
+            const response = await fetch(url);
             const data = await response.json()
-            if (data) {
-                setSynced(true)
+            if (data && response.ok) {
                 setSyncLoading(false)
+
+                commitPreferenceChanges();
+
+                if (data.data?.results) {
+                    setSyncResults(data.data.results);
+                    const successCount = data.data.results.filter((r: any) => r.success).length;
+                    const failCount = data.data.results.length - successCount;
+
+                    if (failCount > 0) {
+                        toast.success(`Synced! ${successCount} added, ${failCount} failed/skipped`, { id: toastId, duration: 5000 });
+                        setShowSyncResults(true);
+                    } else {
+                        toast.success(`Successfully synced ${successCount} anime!`, { id: toastId });
+                    }
+                } else {
+                    toast.success(data.message || 'Successfully synced anime lists!', { id: toastId });
+                }
+
+                await Promise.all([
+                    checkAnimeList(username),
+                    checkSonarrList(username)
+                ]);
             } else {
                 console.error(data)
+                toast.error(data.message || 'Failed to sync anime lists', { id: toastId });
+                setSyncLoading(false)
             }
         } catch (e) {
             console.error(e)
+            toast.error('Failed to sync anime lists', { id: toastId });
+            setSyncLoading(false)
         }
-    }
+    }, [commitPreferenceChanges, checkAnimeList, checkSonarrList]);
+
+    const syncMalWithSonarr = useCallback(async (username: string) => {
+        const hasSelectedLists = Object.values(selectedLists).some(Boolean);
+        const listNameMap: Record<string, string> = {
+            watching: 'Watching',
+            completed: 'Completed',
+            on_hold: 'On Hold',
+            dropped: 'Dropped',
+            plan_to_watch: 'Plan to Watch',
+        };
+
+        if (!hasSelectedLists && userAnimeList && userSonarrList) {
+            const syncedAnime = userAnimeList.filter(anime => {
+                return userSonarrList.some(sonarr => sonarr.malId === anime.malId);
+            });
+
+            if (syncedAnime.length > 0) {
+                setUnsyncedAnime(syncedAnime);
+                setUnsyncedListNames(['All Lists']);
+                setShowUnsyncDialog(true);
+                return;
+            }
+        }
+
+        const unsyncedLists: string[] = [];
+
+        Object.keys(previousLists).forEach((key) => {
+            const listKey = key as keyof typeof previousLists;
+            if (previousLists[listKey] && !selectedLists[listKey]) {
+                unsyncedLists.push(listKey);
+            }
+        });
+
+        if (unsyncedLists.length > 0 && userAnimeList && userSonarrList) {
+            const animeToRemove = userAnimeList.filter(anime => {
+                const status = anime.status.toLowerCase().replace(/ /g, '_');
+                const isInUnsyncedList = unsyncedLists.includes(status);
+                const isInSonarr = userSonarrList.some(sonarr => sonarr.malId === anime.malId);
+                return isInUnsyncedList && isInSonarr;
+            });
+
+            if (animeToRemove.length > 0) {
+                setUnsyncedAnime(animeToRemove);
+                setUnsyncedListNames(unsyncedLists.map(key => listNameMap[key as keyof typeof listNameMap]));
+                setShowUnsyncDialog(true);
+                return;
+            }
+        }
+
+        performSync(username);
+    }, [selectedLists, previousLists, userAnimeList, userSonarrList, performSync]);
 
     useEffect(() => {
-        if (userData && !animeListLoading && !synced && !syncLoading) {
-            const username = userData.name
-            checkAnimeList(username)
-            syncMalWithSonarr(username)
+        if (!userData || !preferencesLoaded || dataLoadedRef.current) {
+            return;
         }
-    }, [userData])
 
-    useEffect(() => {
-        if (userData) {
-            checkSonarrList(userData.name)
-        }
-    }, [synced])
+        const username = userData.name;
+        dataLoadedRef.current = true;
 
+
+        Promise.all([
+            checkAnimeList(username),
+            checkSonarrList(username)
+        ]);
+    }, [userData, preferencesLoaded, checkAnimeList, checkSonarrList]);
+
+    const filteredAnimeList = useMemo(() => {
+        if (!userAnimeList) return [];
+
+        return userAnimeList.filter(anime => {
+            const status = anime.status.toLowerCase().replace(/ /g, '_');
+            return selectedLists[status as keyof typeof selectedLists] || false;
+        });
+    }, [userAnimeList, selectedLists]);
+
+    const inSyncCount = useMemo(() => {
+        if (!filteredAnimeList || !userSonarrList) return 0;
+        const sonarrMap = new Map(userSonarrList.filter(s => s.malId).map(s => [s.malId, s]));
+        return filteredAnimeList.filter(anime => anime.malId && sonarrMap.has(anime.malId)).length;
+    }, [filteredAnimeList, userSonarrList]);
+
+    const needSyncCount = useMemo(() => filteredAnimeList.length - inSyncCount, [filteredAnimeList, inSyncCount]);
+
+    // For the deprecated Dashboard component, we'll just pass 0 for errorCount
+    // since this component is kept for backward compatibility
+    const errorCount = 0;
 
     return (
         <>
-            {userData ? (
-                <Grid container spacing={3} sx={{ padding: 2, display: 'flex', justifyContent: 'center', alignContent: 'center' }}>
-                    <Grid item xs={12} md={2} sx={{
-                                    display: 'flex',
-                                    flexDirection: 'row',
-                                    justifyContent: 'center',
-                                    alignContent: 'center'
-                                }}>
-                        <Card sx={{
-                                    minWidth: '280x'
-                                }}>
-                            <CardMedia
-                                component="img"
-                                height="140"
-                                image={userData.picture}
-                                alt={userData.name}
+            {loading ? (
+                <Grid2 container spacing={3} sx={{ padding: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+                    <Grid2>
+                        <CircularProgress
+                            size={60}
+                            sx={{
+                                color: '#6366f1',
+                                '& .MuiCircularProgress-circle': {
+                                    strokeLinecap: 'round',
+                                },
+                            }}
+                        />
+                    </Grid2>
+                </Grid2>
+            ) : userData ? (
+                <DashboardLayout userData={userData}>
+                    <Box sx={{ width: '100%' }}>
+                        {/* Hero Section */}
+                        <DashboardHero
+                            userData={userData}
+                            userAnimeList={userAnimeList}
+                            filteredAnimeList={filteredAnimeList}
+                            userSonarrList={userSonarrList}
+                            inSyncCount={inSyncCount}
+                            needSyncCount={needSyncCount}
+                            errorCount={errorCount}
+                            onLogout={logout}
+                        />
+
+                        {/* Settings Section - Always Visible */}
+                        <Box sx={{ px: { xs: 2, sm: 4, md: 6 }, py: 3 }}>
+                            <SyncSettingsCard
+                                selectedLists={selectedLists}
+                                updatePreferences={updatePreferences}
+                                preferencesSaving={preferencesSaving}
+                                userAnimeList={userAnimeList}
+                                onSync={() => userData && syncMalWithSonarr(userData.name)}
+                                syncLoading={syncLoading}
                             />
-                            <CardContent>
-                                <Typography variant="h5" component="div" textAlign={'center'}>
-                                    {userData.name}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary" textAlign={'center'}>
-                                    ID: {userData.id}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary" textAlign={'center'}>
-                                    Joined: {new Date(userData.joined_at).toLocaleDateString()}
-                                </Typography>
-                                {userData.location && (
-                                    <Typography variant="body2" color="text.secondary" textAlign={'center'}>
-                                        Location: {userData.location}
+                        </Box>
+
+                        {/* Anime Collection Section */}
+                        <Box sx={{ px: { xs: 2, sm: 4, md: 6 }, py: 3 }}>
+                            {loading ? (
+                                <Box sx={{ textAlign: 'center', py: 4 }}>
+                                    <Typography variant="h6">Loading anime list...</Typography>
+                                </Box>
+                            ) : userAnimeList && userSonarrList ? (
+                                <DisplayAnimeList animeList={filteredAnimeList} sonarrList={userSonarrList} syncResults={syncResults} />
+                            ) : userAnimeList ? (
+                                <Box sx={{ textAlign: 'center', py: 4 }}>
+                                    <Typography variant="body1">
+                                        Loading Sonarr data...
                                     </Typography>
-                                )}
-                                <Grid container sx={{
-                                    display: 'flex',
-                                    flexDirection: 'row',
-                                    justifyContent: 'center',
-                                    alignContent: 'center',
-                                    pt: '1rem'
-                                }}>
-                                    <Grid item xs={5}>
-                                        <Button
-                                            variant="contained"
-                                            color="primary"
-                                            onClick={logout}
-                                        >
-                                            Sync
-                                        </Button>
-                                    </Grid>
-
-                                    <Grid item xs={5}>
-                                        <Button
-                                            variant="contained"
-                                            color="primary"
-                                            onClick={logout}
-                                        >
-                                            Logout
-                                        </Button>
-                                    </Grid>
-                                </Grid>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-
-                    {userAnimeList && userSonarrList && (
-                        <Grid item xs={12}>
-                            <DisplayAnimeList animeList={userAnimeList} sonarrList={userSonarrList} />
-                        </Grid>
-                    )}
-                </Grid >
+                                </Box>
+                            ) : (
+                                <Box sx={{ textAlign: 'center', py: 4 }}>
+                                    <Typography variant="body1">
+                                        {syncLoading ? 'Syncing your lists...' : 'Anime list will load automatically'}
+                                    </Typography>
+                                </Box>
+                            )}
+                        </Box>
+                    </Box>
+                </DashboardLayout>
             ) : (
-                <Grid container>
-                    <Typography variant='body1'>
-                        Please log in
-                    </Typography>
-                </Grid>
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography variant="body1">Please log in to view your dashboard</Typography>
+                </Box>
             )}
+
+            <UnsyncDialog
+                open={showUnsyncDialog}
+                onClose={() => setShowUnsyncDialog(false)}
+                unsyncedAnime={unsyncedAnime}
+                unsyncedListNames={unsyncedListNames}
+                onConfirm={(removeFromSonarr) => {
+                    setShowUnsyncDialog(false);
+                    if (userData) performSync(userData.name, removeFromSonarr);
+                }}
+            />
+
+            <SyncResultsDialog
+                open={showSyncResults}
+                onClose={() => setShowSyncResults(false)}
+                syncResults={syncResults}
+            />
         </>
     );
 };

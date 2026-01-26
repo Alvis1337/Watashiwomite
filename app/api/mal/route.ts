@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import prisma from '../../../lib/prisma';
 import { getMALAnimeList } from '../../../utils/utils';
+import {
+  validateQueryParams,
+  usernameQuerySchema,
+  formatZodError,
+} from '../../../lib/validation-schemas';
+import { withAPIMiddleware, errorResponse } from '../../../lib/api-helpers';
 
 /**
  * @swagger
@@ -116,69 +123,55 @@ import { getMALAnimeList } from '../../../utils/utils';
  *                   example: An error occurred.
  */
 
-export async function GET(req: NextRequest) {
-    const url = new URL(req.url);
-    const username = url.searchParams.get('username');
+export const GET = withAPIMiddleware(async (req: NextRequest) => {
+  // Validate query parameters
+  const { username } = validateQueryParams(req.nextUrl.searchParams, usernameQuerySchema);
 
-    if (!username) {
-        return NextResponse.json({ message: 'Username is required.' }, { status: 400 });
-    }
+  const tokenRecord = await prisma.malToken.findUnique({
+    where: { username },
+  });
 
-    try {
-        const tokenRecord = await prisma.malToken.findUnique({
-            where: { username },
-        });
+  if (!tokenRecord) {
+    return errorResponse(
+      'Please authenticate with MyAnimeList first. Your session may have expired.',
+      401
+    );
+  }
 
-        if (!tokenRecord) {
-            return NextResponse.json({ message: 'Token not found.' }, { status: 404 });
-        }
+  const animeListObject = await prisma.animeList.findUnique({
+    where: { username },
+    include: { anime: true },
+  });
 
-        const animeListObject = await prisma.animeList.findUnique({
-            where: { username },
-            include: { anime: true },
-        });
+  // Fetch anime list from MAL (this also saves to DB)
+  try {
+    const animeList = await getMALAnimeList(tokenRecord.token, username);
+  } catch (error) {
+    console.error('Error fetching MAL anime list:', error);
+    // Token might be expired
+    return errorResponse(
+      'Failed to fetch anime list from MyAnimeList. Your token may have expired. Please re-authenticate.',
+      401
+    );
+  }
 
-        const animeList = await getMALAnimeList(tokenRecord.token, username);
+  if (!animeListObject) {
+    return errorResponse('Anime list not found. Please try syncing again.', 404);
+  }
 
-        const updatedAnimeList = [];
+  // Fetch the updated list from database (already saved by getMALAnimeList)
+  const updatedAnimeList = await prisma.anime.findMany({
+    where: {
+      animeListId: animeListObject.id,
+    },
+    orderBy: {
+      updatedAtMAL: 'desc',
+    },
+  });
 
-        for (const anime of animeList) {
-            const updatedAnime = await prisma.anime.upsert({
-                where: { malId: anime.malId },
-                update: {
-                    title: anime.title,
-                    mainPictureMedium: anime.mainPictureMedium,
-                    mainPictureLarge: anime.mainPictureLarge,
-                    status: anime.status,
-                    score: anime.score,
-                    numEpisodesWatched: anime.numEpisodesWatched,
-                    isRewatching: anime.isRewatching,
-                    updatedAtMAL: anime.updatedAtMAL,
-                    startDate: anime.startDate,
-                },
-                create: {
-                    malId: anime.malId,
-                    title: anime.title,
-                    mainPictureMedium: anime.mainPictureMedium,
-                    mainPictureLarge: anime.mainPictureLarge,
-                    status: anime.status,
-                    score: anime.score,
-                    numEpisodesWatched: anime.numEpisodesWatched,
-                    isRewatching: anime.isRewatching,
-                    updatedAtMAL: anime.updatedAtMAL,
-                    startDate: anime.startDate,
-                    animeList: {
-                        connect: { id: animeListObject?.id ?? -1 },
-                    },
-                    tvdbId: null
-                },
-            });
-            updatedAnimeList.push(updatedAnime);
-        }
-
-        return NextResponse.json({animeList: updatedAnimeList }, { status: 200 });
-    } catch (e) {
-        console.error(e);
-        return NextResponse.json({ message: 'An error occurred.' }, { status: 500 });
-    }
-}
+  return NextResponse.json({
+    success: true,
+    animeList: updatedAnimeList,
+    message: 'Anime list fetched successfully'
+  });
+});

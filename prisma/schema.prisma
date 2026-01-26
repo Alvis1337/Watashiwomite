@@ -15,6 +15,8 @@ model AnimeList {
   sonarrSeries SonarrSeries[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([username])
 }
 
 model Anime {
@@ -31,7 +33,12 @@ model Anime {
   startDate         DateTime?
   animeList         AnimeList @relation(fields: [animeListId], references: [id], onDelete: Cascade)
   animeListId       Int
-  tvdbId            Int?      
+  tvdbId            Int?
+
+  @@index([malId])
+  @@index([animeListId])
+  @@index([tvdbId])
+  @@index([animeListId, updatedAtMAL])
 }
 
 model SonarrSeries {
@@ -74,7 +81,12 @@ model SonarrSeries {
   animeListId       Int
   animeList         AnimeList @relation(fields: [animeListId], references: [id], onDelete: Cascade)
   genres            SonarrSeriesGenre[]
-  malId             Int?       
+  malId             Int?
+
+  @@index([tvdbId])
+  @@index([malId])
+  @@index([animeListId])
+  @@index([title])
 }
 
 model SonarrSeriesGenre {
@@ -103,4 +115,85 @@ model OAuthState {
   codeVerifier String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model UserPreferences {
+  id                              Int      @id @default(autoincrement())
+  username                        String   @unique
+  syncWatching                    Boolean  @default(true)
+  syncCompleted                   Boolean  @default(false)
+  syncOnHold                      Boolean  @default(false)
+  syncDropped                     Boolean  @default(false)
+  syncPlanToWatch                 Boolean  @default(true)
+  searchForMissingEpisodes        Boolean  @default(false)
+
+  // Feature 1: Smart Duplicate Detection
+  enableSmartDuplicateDetection   Boolean  @default(true)
+  fuzzyMatchThreshold             Int      @default(85)
+
+  // Feature 2: Batch Actions After Sync
+  afterSyncRefreshMetadata        Boolean  @default(false)
+  afterSyncSearchMissing          Boolean  @default(false)
+  afterSyncBackupDatabase         Boolean  @default(false)
+
+  // Feature 3: Sync Conflict Resolution
+  conflictResolution              String   @default("skip") // 'mal-wins' | 'sonarr-wins' | 'ask-me' | 'skip'
+
+  // Feature 4: Sync Preview Mode
+  alwaysPreviewBeforeSync         Boolean  @default(false)
+
+  // Feature 5: MAL Score-Based Auto-Monitor
+  scoreBasedMonitoringEnabled     Boolean  @default(false)
+  scoreHighThreshold              Int      @default(8)
+  scoreMedThreshold               Int      @default(6)
+
+  // Feature 6: Airing Status Intelligence
+  monitorOnlyCurrentSeason        Boolean  @default(false)
+  ignoreCompletedSeries           Boolean  @default(false)
+  prioritizeAiring                Boolean  @default(true)
+
+  // Feature 7: Sync History & Rollback
+  keepSyncHistory                 Boolean  @default(true)
+  maxHistoryEntries               Int      @default(10)
+
+  // Feature 8: Intelligent Episode Filtering
+  skipOVAs                        Boolean  @default(false)
+  skipSpecials                    Boolean  @default(false)
+  skipMovies                      Boolean  @default(false)
+  onlyMainSeries                  Boolean  @default(false)
+
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  @@index([username])
+}
+
+model SyncHistory {
+  id                Int      @id @default(autoincrement())
+  username          String
+  syncedAt          DateTime @default(now())
+  addedAnime        Json     // Array of { malId, title, sonarrId }
+  removedAnime      Json     // Array of { malId, title, sonarrId }
+  updatedAnime      Json     // Array of { malId, title, sonarrId, changes }
+  summary           String   // "Added 5, Updated 2, Removed 1"
+  success           Boolean
+  errorMessage      String?
+
+  @@index([username, syncedAt])
+  @@index([username])
+}
+
+model SyncError {
+  id                Int      @id @default(autoincrement())
+  username          String
+  malId             Int
+  title             String
+  reason            String
+  lastAttempt       DateTime @default(now())
+  attemptCount      Int      @default(1)
+  resolved          Boolean  @default(false)
+
+  @@unique([username, malId])
+  @@index([username, resolved])
+  @@index([malId])
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { parse } from 'cookie';
+import { parse, serialize } from 'cookie';
+import prisma from '../../../../lib/prisma';
 
 /**
  * @swagger
@@ -56,26 +57,77 @@ import { parse } from 'cookie';
  *         description: Unauthorized - Token is missing or invalid.
  */
 export async function GET(req: NextRequest) {
-    const cookies = parse(req.headers.get('cookie') || '');
-    const accessToken = cookies['authToken'];
+  const cookies = parse(req.headers.get('cookie') || '');
+  const accessToken = cookies['authToken'];
 
-    if (!accessToken) {
-        return NextResponse.json({ isAuthenticated: false, user: null });
+  if (!accessToken) {
+    return NextResponse.json({ isAuthenticated: false, user: null });
+  }
+
+  try {
+    const userResponse = await fetch('https://api.myanimelist.net/v2/users/@me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!userResponse.ok) {
+      // Token is invalid, clear it
+      const headers = new Headers();
+      headers.append(
+        'Set-Cookie',
+        serialize('authToken', '', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 0,
+          path: '/',
+        })
+      );
+      return NextResponse.json({ isAuthenticated: false, user: null }, { headers });
     }
 
-    try {
-        const userResponse = await fetch('https://api.myanimelist.net/v2/users/@me', {
-            headers: { Authorization: `Bearer ${accessToken}` },
-        });
+    const userData = await userResponse.json();
 
-        if (!userResponse.ok) {
-            return NextResponse.json({ isAuthenticated: false, user: null });
-        }
+    // Check if token exists in database
+    const tokenRecord = await prisma.malToken.findUnique({
+      where: { username: userData.name },
+    });
 
-        const userData = await userResponse.json();
-        return NextResponse.json({ isAuthenticated: true, user: userData, authToken: accessToken });
-    } catch (error) {
-        console.error('Failed to verify token:', error);
-        return NextResponse.json({ isAuthenticated: false, user: null });
+    if (!tokenRecord) {
+      // Cookie exists but no DB token - database might have been reset
+      // Clear the cookie and prompt re-authentication
+      const headers = new Headers();
+      headers.append(
+        'Set-Cookie',
+        serialize('authToken', '', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 0,
+          path: '/',
+        })
+      );
+      return NextResponse.json(
+        {
+          isAuthenticated: false,
+          user: null,
+          message: 'Session expired. Please log in again.',
+        },
+        { headers }
+      );
     }
+
+    return NextResponse.json({ isAuthenticated: true, user: userData, authToken: accessToken });
+  } catch (error) {
+    console.error('Failed to verify token:', error);
+    // Clear invalid cookie
+    const headers = new Headers();
+    headers.append(
+      'Set-Cookie',
+      serialize('authToken', '', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 0,
+        path: '/',
+      })
+    );
+    return NextResponse.json({ isAuthenticated: false, user: null }, { headers });
+  }
 }
