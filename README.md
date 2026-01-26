@@ -21,22 +21,69 @@ The key innovation is creating a correlation between MAL and Sonarr using TVDB a
 - **[Sonarr](https://sonarr.tv/)** - Automated TV show download and organization tool
 - **[TVDB](https://thetvdb.com/)** - Community-driven TV show metadata database
 
-![Project Screenshot](assets/screenshot.png)
+---
+
+## Screenshots
+
+### Landing Page
+![Landing Page](assets/screenshot-landing.png)
+*Clean, modern landing page with hero section and OAuth login*
+
+### Dashboard - Your List
+![Dashboard - Your List](assets/screenshot-dashboard.png)
+*Visual overview of your anime collection with sync status indicators*
+
+### Dashboard Hero Stats
+![Dashboard Hero](assets/screenshot-hero-stats.png)
+*At-a-glance statistics: Total Anime, Synced, Need Sync, and Errors*
+
+### Sync Page
+![Sync Configuration](assets/screenshot-sync.png)
+*Configure which MAL lists to sync (Watching, Completed, Plan to Watch, etc.)*
+
+### Settings Page
+![Settings](assets/screenshot-settings.png)
+*User profile and account management*
+
+### Mobile View
+![Mobile Responsive](assets/screenshot-mobile.png)
+*Fully responsive design with mobile navigation drawer*
+
+---
 
 ## Features
 
-### Core Functionality
-- 🔐 OAuth 2.0 authentication with MyAnimeList  
-- 🔄 Automatic sync between MAL and Sonarr  
-- 🎯 Fuzzy title matching using Levenshtein distance  
-- 📚 Swagger API documentation  
-- 🎨 Modern, flowing dashboard with immersive hero section
-- 📊 Real-time sync status visualization with animated progress
-- ⚙️ Customizable list selection (watching, completed, plan to watch, etc.)
+### Navigation & UI
+- 🎨 Modern navbar navigation with dedicated pages (Dashboard, Sync, Settings)
+- 📱 Fully responsive mobile design with hamburger menu
+- 🎭 Glassmorphic design with smooth animations
+- 🌊 Immersive hero section with profile background
+- ⚡ Active page indication and smooth transitions
+
+### Sync System
+- 🔄 Automatic sync between MAL and Sonarr
+- 🎯 Fuzzy title matching using Levenshtein distance
+- ⚙️ Customizable list selection (Watching, Completed, Plan to Watch, etc.)
+- 📊 4-stat overview: Total Anime, Synced, Need Sync, **Errors**
+- ❌ **Error tracking** - Separate display for failed syncs
 - 🗑️ Selective anime removal from Sonarr
-- ⚡ Floating action buttons for quick access
-- 🎭 Glass morphism UI with smooth animations
-- 📱 Fully responsive mobile design  
+- 🔍 Sync preview mode
+- 📜 Sync history with audit trail
+
+### Advanced Features
+- 🤖 Smart duplicate detection
+- 🎬 Batch actions (metadata refresh, episode search)
+- ⚖️ Conflict resolution strategies
+- ⭐ Score-based auto-monitoring
+- 🎯 Intelligent episode filtering (skip OVAs, specials, movies)
+- 💾 User preferences with 20+ configurable options
+
+### Developer Features
+- 🔐 OAuth 2.0 authentication with MyAnimeList
+- 📚 Swagger API documentation
+- 🗄️ PostgreSQL with Prisma ORM
+- 🔒 Rate limiting and caching
+- 🏥 Health check endpoints  
 
 ---
 
@@ -116,51 +163,92 @@ Open your browser to **http://localhost:3000**
 
 1. **Click "Login with MyAnimeList"** on the home page
 2. **Authorize the application** on MyAnimeList
-3. **Wait for initial sync** to complete
+3. **You'll be redirected to the Dashboard** automatically
 
-The app will automatically:
-- Fetch your "Watching" anime from MAL
-- Look up TVDB IDs for each series
-- Add them to Sonarr with MAL correlation
+The app will initially display your anime list. Use the navigation to configure sync settings.
 
-### Dashboard
+### Navigation
 
-After authentication, you'll see a modern, flowing interface featuring:
+The app has three main sections accessible via the navbar:
 
-**Hero Section:**
-- Your MAL profile with immersive background
-- At-a-glance stats (Total Anime, Synced, Need Sync, Completion %)
-- Animated progress indicators
+#### 📚 Your List (`/dashboard`)
+View your anime collection with:
+- **Hero Stats** - Total, Synced, Need Sync, and Errors count
+- **Anime Grid** - Visual cards with sync status
+- **Color Coding:**
+  - 🟢 Green border = Successfully synced
+  - 🔴 Red border = Not synced / Needs attention
+  - ❌ Error badge = Failed to sync
 
-**Anime Collection:**
-- Visual grid of all your anime with hover effects
-- Color-coded sync status for each show (Green = synced, Red = not synced)
-- Advanced filtering and search
-- Smooth animations and transitions
+#### 🔄 Sync (`/sync`)
+Configure sync settings:
+- **List Selection** - Choose which MAL lists to sync
+  - Watching
+  - Completed
+  - On Hold
+  - Dropped
+  - Plan to Watch
+- **Sync Button** - Execute sync with unsync warning
+- **Anime Count** - See how many anime in each list
 
-**Floating Actions:**
-- Quick sync button always accessible
-- Settings panel (collapsible to reduce clutter)
-- Scroll to top button
-- Mobile-friendly touch targets
+#### ⚙️ Settings (`/settings`)
+- View your MAL profile information
+- Account management
+- Logout
 
-### Syncing
+### Understanding Sync Status
 
-- **Manual Sync:** Click the "Sync" button to trigger a new sync
-- **Auto Sync:** The app syncs automatically on login
+The dashboard hero shows 4 key metrics:
 
-> **Important:** By default, Sonarr will **NOT** automatically search for episodes. This is intentional to prevent overwhelming your indexers. To enable automatic search, edit `utils/updatedUtils.ts` and change `searchForMissingEpisodes: false` to `true`.
+1. **Total Anime** - Number of anime from selected lists
+2. **Synced** ✅ - Anime successfully added to Sonarr
+3. **Need Sync** ⏳ - Anime not yet synced (will be added on next sync)
+4. **Errors** ❌ - Anime that failed to sync (e.g., not found on TVDB)
+
+> **Key Difference:** "Errors" are anime that have been **attempted** and failed, while "Need Sync" are anime that haven't been synced yet. This prevents confusion about which anime can't be synced vs which just need syncing.
+
+### Syncing Process
+
+1. Navigate to **Sync** page (`/sync`)
+2. Select which MAL lists to sync (default: Watching + Plan to Watch)
+3. Click **"Sync Now"** button
+4. If you deselect a previously synced list, you'll be warned about removing anime from Sonarr
+5. Check the Dashboard to see updated sync status
+
+### Error Handling
+
+If anime show up in the **Errors** count:
+- They couldn't be found on TVDB (most common)
+- Sonarr API error occurred
+- Network/connectivity issues
+
+These anime won't appear in "Need Sync" to avoid repeated failed attempts.
 
 ---
 
 ## API Documentation
 
-Access interactive API documentation at: **https://localhost:3000/api-doc**
+Access interactive API documentation at: **http://localhost:3000/api-doc**
 
 Swagger UI provides:
 - All available endpoints
 - Request/response schemas
 - Try-it-out functionality
+
+### Key Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/check` | GET | Check authentication status |
+| `/api/mal` | GET | Fetch MAL anime list |
+| `/api/sonarr/database` | GET | Fetch Sonarr series |
+| `/api/sync/diff` | GET | Sync MAL with Sonarr |
+| `/api/sync/errors` | GET | Fetch sync errors |
+| `/api/sync/history` | GET | View sync history |
+| `/api/sync/preview` | GET | Preview sync changes |
+| `/api/preferences` | GET/POST | Manage user preferences |
+| `/api/sonarr/remove` | POST | Remove anime from Sonarr |
+| `/api/health` | GET | Health check |
 
 ---
 
@@ -208,14 +296,45 @@ Swagger UI provides:
 Watashiwomite/
 ├── app/
 │   ├── api/              # Next.js API routes
+│   │   ├── auth/         # Authentication endpoints
+│   │   ├── mal/          # MyAnimeList integration
+│   │   ├── sonarr/       # Sonarr integration
+│   │   ├── sync/         # Sync orchestration
+│   │   └── preferences/  # User preferences
 │   ├── components/       # React components
+│   │   ├── dashboard/    # Dashboard-specific components
+│   │   ├── mal/          # MAL display components
+│   │   └── index/        # Landing page components
 │   ├── context/          # React context providers
-│   └── hooks/            # Custom React hooks
-├── lib/                  # Shared libraries (Prisma, Swagger)
+│   ├── hooks/            # Custom React hooks
+│   ├── dashboard/        # Dashboard page
+│   ├── sync/             # Sync page
+│   └── settings/         # Settings page
+├── lib/                  # Shared libraries
+│   ├── prisma.ts         # Database client
+│   ├── cache.ts          # Response caching
+│   ├── rate-limiter.ts   # API rate limiting
+│   └── swagger.ts        # API documentation
 ├── prisma/               # Database schema & migrations
+├── services/             # Business logic services
+│   ├── syncDiffService.ts
+│   ├── preferencesService.ts
+│   └── sonarrRemovalService.ts
 ├── types/                # TypeScript type definitions
 └── utils/                # Utility functions
+    ├── enhancedSync.ts   # Advanced sync features
+    ├── syncHistory.ts    # History management
+    └── batchActions.ts   # Post-sync automation
 ```
+
+### Tech Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **Database:** PostgreSQL with Prisma ORM
+- **UI:** Material-UI (MUI) v6
+- **Auth:** OAuth 2.0 with MyAnimeList
+- **API Docs:** Swagger/OpenAPI
+- **Animation:** Framer Motion
 
 
 ### Roadmap
