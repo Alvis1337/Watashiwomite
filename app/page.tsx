@@ -11,20 +11,44 @@ import { useRouter } from 'next/navigation';
 export default function Home() {
   const { isAuthenticated, isLoading } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Check if initial setup is needed
   useEffect(() => {
-    if (mounted && !isLoading && isAuthenticated) {
+    async function checkSetup() {
+      try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+        
+        if (!data.hasConfigured) {
+          router.push('/setup');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to check setup status:', error);
+      } finally {
+        setCheckingSetup(false);
+      }
+    }
+
+    if (mounted && !isLoading) {
+      checkSetup();
+    }
+  }, [mounted, isLoading, router]);
+
+  useEffect(() => {
+    if (mounted && !isLoading && !checkingSetup && isAuthenticated) {
       router.push('/dashboard');
     }
-  }, [mounted, isLoading, isAuthenticated, router]);
+  }, [mounted, isLoading, checkingSetup, isAuthenticated, router]);
 
   // Prevent hydration mismatch by not rendering auth-dependent content until mounted
-  if (!mounted || isLoading) {
+  if (!mounted || isLoading || checkingSetup) {
     return (
       <Box
         sx={{

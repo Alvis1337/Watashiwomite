@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { serialize } from 'cookie';
+import { getSettings } from '@/lib/settings';
 
-const clientId = process.env.MAL_CLIENT_ID;
-const clientSecret = process.env.MAL_CLIENT_SECRET;
-const redirectUri = process.env.MAL_REDIRECT_URI;
 const tokenEndpoint = 'https://myanimelist.net/v1/oauth2/token';
 
 /**
@@ -54,11 +52,20 @@ const tokenEndpoint = 'https://myanimelist.net/v1/oauth2/token';
  */
 
 export async function GET(req: NextRequest) {
-  if (!clientId || !clientSecret || !redirectUri) {
-    return NextResponse.json({ message: 'Missing environment variables' }, { status: 500 });
-  }
-
   try {
+    // Get settings from database
+    const settings = await getSettings();
+    const clientId = settings.malClientId;
+    const clientSecret = settings.malClientSecret;
+    const redirectUri = settings.malRedirectUri;
+
+    if (!clientId || !clientSecret || !redirectUri) {
+      return NextResponse.json(
+        { message: 'MAL OAuth not configured. Please complete setup first.' },
+        { status: 500 }
+      );
+    }
+
     const url = new URL(req.url);
     const authorizationCode = url.searchParams.get('code');
 

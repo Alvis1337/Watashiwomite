@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma';
 import { cache, CacheKeys, CacheTTL } from '../lib/cache';
+import { getSettings } from '../lib/settings';
 import type {
   SonarrSeries,
   SonarrRootFolder,
@@ -52,11 +53,12 @@ export const getUsernameFromToken = async (token: string): Promise<string> => {
  * @throws Error if Sonarr API is unavailable
  */
 export const getSonarrRootFolder = async (): Promise<SonarrRootFolder[]> => {
-  const sonarrUrl = process.env.SONARR_URL;
-  const sonarrApiKey = process.env.SONARR_API_KEY;
+  const settings = await getSettings();
+  const sonarrUrl = settings.sonarrUrl;
+  const sonarrApiKey = settings.sonarrApiKey;
 
   if (!sonarrUrl || !sonarrApiKey) {
-    throw new Error('SONARR_URL and SONARR_API_KEY must be configured');
+    throw new Error('Sonarr is not configured. Please complete setup.');
   }
 
   // Use cache for root folders (they rarely change)
@@ -88,11 +90,12 @@ export const getSonarrRootFolder = async (): Promise<SonarrRootFolder[]> => {
  * @throws Error if Sonarr API is unavailable
  */
 export const getSonarrAnimeList = async (): Promise<SonarrSeries[]> => {
-  const sonarrUrl = process.env.SONARR_URL;
-  const sonarrApiKey = process.env.SONARR_API_KEY;
+  const settings = await getSettings();
+  const sonarrUrl = settings.sonarrUrl;
+  const sonarrApiKey = settings.sonarrApiKey;
 
   if (!sonarrUrl || !sonarrApiKey) {
-    throw new Error('SONARR_URL and SONARR_API_KEY must be configured');
+    throw new Error('Sonarr is not configured. Please complete setup.');
   }
 
   try {
@@ -108,9 +111,9 @@ export const getSonarrAnimeList = async (): Promise<SonarrSeries[]> => {
     }
 
     return (await response.json()) as SonarrSeries[];
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to get Sonarr anime list:', error);
-    throw new Error('Failed to fetch Sonarr anime list');
+    throw error; // Re-throw the original error to preserve status codes
   }
 };
 

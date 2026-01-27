@@ -197,3 +197,18 @@ model SyncError {
   @@index([username, resolved])
   @@index([malId])
 }
+
+model AppSettings {
+  id              Int      @id @default(autoincrement())
+  username        String   @unique
+  sonarrUrl       String?
+  sonarrApiKey    String?
+  tvdbApiKey      String?
+  malClientId     String?
+  malClientSecret String?
+  malRedirectUri  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([username])
+}

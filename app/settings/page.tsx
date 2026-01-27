@@ -12,6 +12,10 @@ import {
     Avatar,
     Divider,
     Alert,
+    TextField,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
 } from '@mui/material';
 import Grid2 from '@mui/material/Grid2';
 import Navbar from '../components/Navbar';
@@ -19,7 +23,10 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import SettingsIcon from '@mui/icons-material/Settings';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 interface UserData {
     id: number;
@@ -30,11 +37,30 @@ interface UserData {
     authToken: string;
 }
 
+interface AppSettings {
+    malClientId: string;
+    malClientSecret: string;
+    malRedirectUri: string;
+    sonarrUrl: string;
+    sonarrApiKey: string;
+    tvdbApiKey: string;
+}
+
 export default function SettingsPage() {
     const { logout, isAuthenticated, isLoading } = useAuth();
     const [userData, setUser] = useState<UserData>();
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const router = useRouter();
+    
+    const [appSettings, setAppSettings] = useState<AppSettings>({
+        malClientId: '',
+        malClientSecret: '',
+        malRedirectUri: '',
+        sonarrUrl: '',
+        sonarrApiKey: '',
+        tvdbApiKey: '',
+    });
 
     useEffect(() => {
         if (!isLoading && !isAuthenticated) {
@@ -56,6 +82,7 @@ export default function SettingsPage() {
 
                 if (data.isAuthenticated && data.user) {
                     setUser(data.user);
+                    await loadSettings();
                 } else {
                     console.error('[Settings] Not authenticated');
                     router.push('/');
@@ -76,6 +103,70 @@ export default function SettingsPage() {
             mounted = false;
         };
     }, [router]);
+
+    const loadSettings = async () => {
+        try {
+            const response = await fetch('/api/settings');
+            const data = await response.json();
+            if (response.ok && data.settings) {
+                setAppSettings(data.settings);
+            }
+        } catch (error) {
+            console.error('[Settings] Failed to load settings:', error);
+        }
+    };
+
+    const handleSettingsChange = (field: keyof AppSettings) => (
+        event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        setAppSettings({ ...appSettings, [field]: event.target.value });
+    };
+
+    const handleSaveSettings = async () => {
+        setSaving(true);
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(appSettings),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                toast.success('Settings saved successfully!');
+            } else {
+                toast.error(data.error || 'Failed to save settings');
+            }
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            toast.error('Failed to save settings');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleTestSonarrConnection = async () => {
+        try {
+            const response = await fetch(`${appSettings.sonarrUrl}/api/v3/system/status`, {
+                headers: {
+                    'X-Api-Key': appSettings.sonarrApiKey,
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                toast.success(`Connected to Sonarr v${data.version}!`);
+            } else if (response.status === 401) {
+                toast.error('Invalid Sonarr API Key (401 Unauthorized)');
+            } else {
+                toast.error(`Sonarr connection failed: ${response.status} ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Sonarr test failed:', error);
+            toast.error('Failed to connect to Sonarr. Check URL and ensure Sonarr is running.');
+        }
+    };
 
     const handleLogout = async () => {
         await logout();
@@ -282,6 +373,143 @@ export default function SettingsPage() {
                                         Logout
                                     </Button>
                                 </Box>
+                            </CardContent>
+                        </Card>
+                    </Grid2>
+
+                    {/* App Configuration Card */}
+                    <Grid2 size={{ xs: 12 }}>
+                        <Card
+                            sx={{
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                backdropFilter: 'blur(10px)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: 3,
+                            }}
+                        >
+                            <CardContent sx={{ p: 3 }}>
+                                <Typography
+                                    variant="h6"
+                                    sx={{
+                                        fontWeight: 600,
+                                        mb: 3,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                    }}
+                                >
+                                    <SettingsIcon /> Application Configuration
+                                </Typography>
+
+                                <Accordion
+                                    sx={{
+                                        background: 'rgba(255, 255, 255, 0.03)',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        mb: 2,
+                                    }}
+                                >
+                                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                        <Typography>MAL OAuth Settings</Typography>
+                                    </AccordionSummary>
+                                    <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <TextField
+                                            label="MAL Client ID"
+                                            value={appSettings.malClientId}
+                                            onChange={handleSettingsChange('malClientId')}
+                                            fullWidth
+                                            size="small"
+                                        />
+                                        <TextField
+                                            label="MAL Client Secret"
+                                            value={appSettings.malClientSecret}
+                                            onChange={handleSettingsChange('malClientSecret')}
+                                            type="password"
+                                            fullWidth
+                                            size="small"
+                                        />
+                                        <TextField
+                                            label="MAL Redirect URI"
+                                            value={appSettings.malRedirectUri}
+                                            onChange={handleSettingsChange('malRedirectUri')}
+                                            fullWidth
+                                            size="small"
+                                        />
+                                    </AccordionDetails>
+                                </Accordion>
+
+                                <Accordion
+                                    sx={{
+                                        background: 'rgba(255, 255, 255, 0.03)',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        mb: 2,
+                                    }}
+                                >
+                                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                        <Typography>Sonarr Settings</Typography>
+                                    </AccordionSummary>
+                                    <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <TextField
+                                            label="Sonarr URL"
+                                            value={appSettings.sonarrUrl}
+                                            onChange={handleSettingsChange('sonarrUrl')}
+                                            placeholder="http://localhost:8989"
+                                            fullWidth
+                                            size="small"
+                                        />
+                                        <TextField
+                                            label="Sonarr API Key"
+                                            value={appSettings.sonarrApiKey}
+                                            onChange={handleSettingsChange('sonarrApiKey')}
+                                            type="password"
+                                            fullWidth
+                                            size="small"
+                                        />
+                                        <Button
+                                            variant="outlined"
+                                            onClick={handleTestSonarrConnection}
+                                            size="small"
+                                            sx={{ mt: 1 }}
+                                        >
+                                            Test Connection
+                                        </Button>
+                                    </AccordionDetails>
+                                </Accordion>
+
+                                <Accordion
+                                    sx={{
+                                        background: 'rgba(255, 255, 255, 0.03)',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    }}
+                                >
+                                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                        <Typography>TVDB Settings</Typography>
+                                    </AccordionSummary>
+                                    <AccordionDetails>
+                                        <TextField
+                                            label="TVDB API Key"
+                                            value={appSettings.tvdbApiKey}
+                                            onChange={handleSettingsChange('tvdbApiKey')}
+                                            type="password"
+                                            fullWidth
+                                            size="small"
+                                        />
+                                    </AccordionDetails>
+                                </Accordion>
+
+                                <Button
+                                    variant="contained"
+                                    onClick={handleSaveSettings}
+                                    disabled={saving}
+                                    fullWidth
+                                    sx={{
+                                        mt: 3,
+                                        background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 100%)',
+                                        textTransform: 'none',
+                                        py: 1.5,
+                                    }}
+                                >
+                                    {saving ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Save Configuration'}
+                                </Button>
                             </CardContent>
                         </Card>
                     </Grid2>

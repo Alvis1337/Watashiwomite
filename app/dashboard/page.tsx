@@ -258,7 +258,11 @@ export default function DashboardPage() {
                             <Typography variant="h6">Loading anime list...</Typography>
                         </Box>
                     ) : userAnimeList && userSonarrList ? (
-                        <DisplayAnimeList animeList={filteredAnimeList} sonarrList={userSonarrList} />
+                        <DisplayAnimeList 
+                            animeList={filteredAnimeList} 
+                            sonarrList={userSonarrList}
+                            syncErrors={syncErrors}
+                        />
                     ) : userAnimeList ? (
                         <Box sx={{ textAlign: 'center', py: 4 }}>
                             <Typography variant="body1">

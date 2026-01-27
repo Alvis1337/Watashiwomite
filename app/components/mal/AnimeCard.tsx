@@ -24,6 +24,7 @@ interface AnimeCardProps {
   sonarrSeries?: SonarrSeries;
   isInSync: boolean;
   sonarrUrl: string | null;
+  syncError?: { malId: number; title: string; reason: string };
 }
 
 export const AnimeCard: React.FC<AnimeCardProps> = ({
@@ -31,6 +32,7 @@ export const AnimeCard: React.FC<AnimeCardProps> = ({
   sonarrSeries,
   isInSync,
   sonarrUrl,
+  syncError,
 }) => {
   return (
     <Card
@@ -296,14 +298,26 @@ export const AnimeCard: React.FC<AnimeCardProps> = ({
               >
                 Not synced to Sonarr
               </Typography>
-              <Typography
-                variant="caption"
-                color="textSecondary"
-                display="block"
-                sx={{ fontSize: '0.65rem', mt: 0.5 }}
-              >
-                Click "Sync" to add to Sonarr
-              </Typography>
+              {syncError && (
+                <Typography
+                  variant="caption"
+                  color="error.light"
+                  display="block"
+                  sx={{ fontSize: '0.65rem', mt: 0.5 }}
+                >
+                  {syncError.reason}
+                </Typography>
+              )}
+              {!syncError && (
+                <Typography
+                  variant="caption"
+                  color="textSecondary"
+                  display="block"
+                  sx={{ fontSize: '0.65rem', mt: 0.5 }}
+                >
+                  Click "Sync" to add to Sonarr
+                </Typography>
+              )}
             </Box>
           )}
         </Box>

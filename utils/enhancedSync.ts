@@ -14,6 +14,9 @@ import {
   resolveConflict,
   ConflictResolutionStrategy,
 } from './syncFeatures';
+import type { AddResult, SonarrSeries, TVDBSearchResult } from '../types/external';
+import { cache, CacheKeys, CacheTTL } from '../lib/cache';
+import { getSettings } from '../lib/settings';
 
 export interface AnimeSeries {
   title: string;
@@ -59,11 +62,12 @@ export async function addAnimeToSonarrEnhanced(
   rootFolder: string,
   preferences: SyncPreferences
 ): Promise<AddResult[]> {
-  const sonarrUrl = `${process.env.SONARR_URL}/api/v3/series`;
-  const sonarrApiKey = process.env.SONARR_API_KEY;
+  const settings = await getSettings();
+  const sonarrUrl = `${settings.sonarrUrl}/api/v3/series`;
+  const sonarrApiKey = settings.sonarrApiKey;
 
   if (!sonarrApiKey) {
-    throw new Error('SONARR_API_KEY is not configured');
+    throw new Error('Sonarr API key is not configured');
   }
 
   // Fetch existing series from Sonarr
@@ -229,7 +233,7 @@ export async function addAnimeToSonarrEnhanced(
       addOptions: {
         searchForMissingEpisodes: monitoringConfig.searchForMissingEpisodes,
       },
-      tags: airingLogic.priority ? ['priority'] : [],
+      tags: [], // Sonarr expects integer tag IDs, not strings. Leave empty for now.
     };
 
     // Add to Sonarr
@@ -253,12 +257,37 @@ export async function addAnimeToSonarrEnhanced(
         });
       } else {
         const errorText = await response.text();
-        console.error(`[EnhancedSync] Failed to add ${series.title}:`, errorText);
-        results.push({
-          title: series.title,
-          success: false,
-          reason: `API error: ${response.status}`,
-        });
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+        
+        // Check if it's a duplicate error (already exists in Sonarr)
+        const isDuplicate = 
+          errorText.includes('TitleSlug') ||
+          errorText.includes('UNIQUE constraint failed') ||
+          errorText.includes('is already configured for another series') ||
+          (Array.isArray(errorData) && errorData.some((err: any) => 
+            err.errorCode === 'SeriesTitleSlugValidator' || 
+            err.errorCode === 'SeriesPathValidator'
+          ));
+
+        if (isDuplicate) {
+          results.push({
+            title: series.title,
+            success: false,
+            reason: 'Already in Sonarr (skipped)',
+          });
+        } else {
+          console.error(`[EnhancedSync] Failed to add ${series.title}:`, errorData);
+          results.push({
+            title: series.title,
+            success: false,
+            reason: `API error: ${response.status}`,
+          });
+        }
       }
     } catch (error) {
       console.error(`[EnhancedSync] Error adding ${series.title}:`, error);

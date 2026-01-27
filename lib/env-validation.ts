@@ -8,17 +8,17 @@ const envSchema = z.object({
   POSTGRES_PRISMA_URL: z.string().url('Invalid PostgreSQL Prisma URL'),
   POSTGRES_URL_NON_POOLING: z.string().url('Invalid PostgreSQL non-pooling URL'),
 
-  // MyAnimeList OAuth
-  MAL_CLIENT_ID: z.string().min(1, 'MAL Client ID is required'),
-  MAL_CLIENT_SECRET: z.string().min(1, 'MAL Client Secret is required'),
-  MAL_REDIRECT_URI: z.string().url('Invalid MAL redirect URI'),
+  // MyAnimeList OAuth (optional - can be configured in app settings)
+  MAL_CLIENT_ID: z.string().optional(),
+  MAL_CLIENT_SECRET: z.string().optional(),
+  MAL_REDIRECT_URI: z.string().url('Invalid MAL redirect URI').optional(),
 
-  // Sonarr
-  SONARR_API_KEY: z.string().min(1, 'Sonarr API key is required'),
-  SONARR_URL: z.string().url('Invalid Sonarr URL'),
+  // Sonarr (optional - can be configured in app settings)
+  SONARR_API_KEY: z.string().optional(),
+  SONARR_URL: z.string().url('Invalid Sonarr URL').optional(),
 
-  // TVDB
-  TVDBID_API_KEY: z.string().min(1, 'TVDB API key is required'),
+  // TVDB (optional - can be configured in app settings)
+  TVDBID_API_KEY: z.string().optional(),
 
   // Optional but recommended
   NEXT_PUBLIC_BASE_URL: z.string().url('Invalid base URL').optional(),

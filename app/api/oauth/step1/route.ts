@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import prisma from '../../../../lib/prisma';
+import { getSettings } from '@/lib/settings';
 
-const clientId = process.env.MAL_CLIENT_ID;
-const redirectUri = process.env.MAL_REDIRECT_URI;
 const authorizationEndpoint = 'https://myanimelist.net/v1/oauth2/authorize';
 
 function generateCodeVerifier(length: number = 64): string {
@@ -72,6 +71,18 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Get settings from database
+    const settings = await getSettings();
+    const clientId = settings.malClientId;
+    const redirectUri = settings.malRedirectUri;
+
+    if (!clientId || !redirectUri) {
+      return NextResponse.json(
+        { message: 'MAL OAuth not configured. Please complete setup first.' },
+        { status: 400 }
+      );
+    }
+
     const existingCodeRecord = await prisma.oAuthState.findUnique({ where: { username } });
 
     let codeVerifier: string;
@@ -89,21 +100,14 @@ export async function GET(req: NextRequest) {
 
     const codeChallenge = generateCodeChallenge(codeVerifier);
 
-    if (clientId && redirectUri) {
-      const authorizationUrl = new URL(authorizationEndpoint);
-      authorizationUrl.searchParams.append('response_type', 'code');
-      authorizationUrl.searchParams.append('client_id', clientId);
-      authorizationUrl.searchParams.append('redirect_uri', redirectUri);
-      authorizationUrl.searchParams.append('code_challenge', codeChallenge);
-      authorizationUrl.searchParams.append('code_challenge_method', 'plain');
+    const authorizationUrl = new URL(authorizationEndpoint);
+    authorizationUrl.searchParams.append('response_type', 'code');
+    authorizationUrl.searchParams.append('client_id', clientId);
+    authorizationUrl.searchParams.append('redirect_uri', redirectUri);
+    authorizationUrl.searchParams.append('code_challenge', codeChallenge);
+    authorizationUrl.searchParams.append('code_challenge_method', 'plain');
 
-      return NextResponse.json({ authorizationUrl });
-    } else {
-      return NextResponse.json(
-        { message: 'No client ID or redirect URI specified' },
-        { status: 400 }
-      );
-    }
+    return NextResponse.json({ authorizationUrl });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ message: 'An error occurred.' }, { status: 500 });

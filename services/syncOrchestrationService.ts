@@ -118,8 +118,8 @@ async function executeBatchActionsIfEnabled(
       },
       addedSonarrIds,
       username,
-      process.env.SONARR_API_KEY!,
-      process.env.SONARR_URL!
+      settings.sonarrApiKey,
+      settings.sonarrUrl
     );
   } catch (error) {
     console.error('[Sync] Failed to execute batch actions:', error);
@@ -136,10 +136,11 @@ export async function performSync(
   preferences: SyncPreferences,
   username: string
 ): Promise<SyncResult[]> {
-  const tvdbidApiKey = process.env.TVDBID_API_KEY;
+  const settings = await getSettings();
+  const tvdbidApiKey = settings.tvdbApiKey;
 
   if (!tvdbidApiKey) {
-    throw new Error('TVDB API key is missing');
+    throw new Error('TVDB API key is not configured');
   }
 
   // Get TVDB IDs

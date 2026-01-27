@@ -3,6 +3,7 @@ import prisma from '../../../../lib/prisma';
 import { getTvdbIds, getSonarrRootFolder } from '@/utils/utils';
 import { addAnimeToSonarrEnhanced } from '@/utils/enhancedSync';
 import { logSyncHistory, SyncChange } from '@/utils/syncHistory';
+import { getSettings } from '@/lib/settings';
 import { executeAfterSyncActions } from '@/utils/batchActions';
 import type { Anime } from '@/types/interfaces';
 
@@ -135,12 +136,34 @@ export async function GET(req: NextRequest) {
         : `http://localhost:${req.nextUrl.port || 3000}`);
 
     const syncSonarr = await fetch(`${baseUrl}/api/sonarr/sync?username=${username}`);
-    if (!syncSonarr.ok) throw new Error('Failed to sync Sonarr list');
+    if (!syncSonarr.ok) {
+      const errorData = await syncSonarr.json().catch(() => ({}));
+      return NextResponse.json(
+        { 
+          message: errorData.message || 'Failed to sync Sonarr list',
+          error: errorData.error || 'SONARR_SYNC_FAILED'
+        },
+        { status: syncSonarr.status }
+      );
+    }
 
     const syncMal = await fetch(`${baseUrl}/api/mal?username=${username}`);
-    if (!syncMal.ok) throw new Error('Failed to sync MAL list');
-  } catch (e) {
+    if (!syncMal.ok) {
+      const errorData = await syncMal.json().catch(() => ({}));
+      return NextResponse.json(
+        { 
+          message: errorData.message || 'Failed to sync MAL list',
+          error: 'MAL_SYNC_FAILED'
+        },
+        { status: syncMal.status }
+      );
+    }
+  } catch (e: any) {
     console.error('Failed to sync your lists before the operation:', e);
+    return NextResponse.json(
+      { message: e.message || 'Failed to prepare sync' },
+      { status: 500 }
+    );
   }
 
   if (!username) {
@@ -383,7 +406,8 @@ export async function GET(req: NextRequest) {
         lists: { mal: animeTitles, sonarr: sonarrTitles },
       });
     } else {
-      const tvdbidApiKey = process.env.TVDBID_API_KEY;
+      const settings = await getSettings();
+      const tvdbidApiKey = settings.tvdbApiKey;
       const tvdbids = await getTvdbIds(uniqueToMal, tvdbidApiKey);
       const rootFolder = await getSonarrRootFolder();
 
@@ -590,10 +614,11 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const tvdbidApiKey = process.env.TVDBID_API_KEY;
+  const settings = await getSettings();
+  const tvdbidApiKey = settings.tvdbApiKey;
 
   if (!tvdbidApiKey) {
-    return NextResponse.json({ message: 'TVDB API key is missing.' }, { status: 500 });
+    return NextResponse.json({ message: 'TVDB API key is not configured. Please complete setup.' }, { status: 500 });
   }
 
   const tvdbids = await getTvdbIds(uniqueToMal, tvdbidApiKey);

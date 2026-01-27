@@ -14,9 +14,10 @@ interface AnimeListData {
   animeList: Anime[];
   sonarrList: SonarrSeries[];
   syncResults?: { title: string; success: boolean; reason?: string }[] | null;
+  syncErrors?: Array<{ malId: number; title: string; reason: string }>;
 }
 
-const DisplayAnimeList: React.FC<AnimeListData> = ({ animeList, sonarrList }) => {
+const DisplayAnimeList: React.FC<AnimeListData> = ({ animeList, sonarrList, syncErrors = [] }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'synced' | 'unsynced'>('all');
   const [sortBy, setSortBy] = useState<'title' | 'malId' | 'status'>('title');
@@ -206,6 +207,7 @@ const DisplayAnimeList: React.FC<AnimeListData> = ({ animeList, sonarrList }) =>
       {paginatedAnime.map((anime, index) => {
         const isInSync = anime.malId && sonarrMap.has(anime.malId);
         const sonarrSeries = isInSync ? sonarrMap.get(anime.malId) : undefined;
+        const syncError = syncErrors.find(err => err.malId === anime.malId);
 
         return (
           <Grid2 size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={anime.malId || index}>
@@ -214,6 +216,7 @@ const DisplayAnimeList: React.FC<AnimeListData> = ({ animeList, sonarrList }) =>
               sonarrSeries={sonarrSeries}
               isInSync={!!isInSync}
               sonarrUrl={sonarrUrl}
+              syncError={syncError}
             />
           </Grid2>
         );

@@ -134,8 +134,38 @@ export async function GET(req: NextRequest) {
     const sonarrList = await getSonarrAnimeList();
     const saveList = await saveSonarrSeries(username, sonarrList);
     return NextResponse.json({ saveList });
-  } catch (e) {
+  } catch (e: any) {
     console.error(e);
-    return NextResponse.json({ message: 'Failed to fetch list from Sonarr' }, { status: 500 });
+    
+    const errorMessage = e.message || '';
+    
+    // Check if it's a Sonarr API error and extract status code
+    if (errorMessage.includes('Sonarr API error: 401')) {
+      return NextResponse.json(
+        { 
+          message: 'Sonarr authentication failed. Please check your API key in Settings.',
+          error: 'SONARR_AUTH_FAILED' 
+        }, 
+        { status: 401 }
+      );
+    }
+    
+    if (errorMessage.includes('Sonarr API error:')) {
+      return NextResponse.json(
+        { 
+          message: errorMessage || 'Failed to connect to Sonarr. Please verify Sonarr is running and the URL is correct.',
+          error: 'SONARR_CONNECTION_FAILED' 
+        }, 
+        { status: 502 }
+      );
+    }
+    
+    return NextResponse.json(
+      { 
+        message: errorMessage || 'Failed to fetch list from Sonarr',
+        error: 'UNKNOWN_ERROR' 
+      }, 
+      { status: 500 }
+    );
   }
 }

@@ -1,3 +1,6 @@
+import type { AddResult, TVDBSearchResult } from '../types/external';
+import { getSettings } from '../lib/settings';
+
 export interface Anime {
   title: string;
 }
@@ -23,11 +26,12 @@ export const addAnimeToSonarr = async (
   rootFolder: string,
   searchForMissingEpisodes: boolean = false
 ): Promise<AddResult[]> => {
-  const sonarrUrl = `${process.env.SONARR_URL}/api/v3/series`;
-  const sonarrApiKey = process.env.SONARR_API_KEY;
+  const settings = await getSettings();
+  const sonarrUrl = `${settings.sonarrUrl}/api/v3/series`;
+  const sonarrApiKey = settings.sonarrApiKey;
 
   if (!sonarrApiKey) {
-    throw new Error('SONARR_API_KEY is not configured');
+    throw new Error('Sonarr API key is not configured');
   }
 
   // First, get existing series from Sonarr to check for duplicates
