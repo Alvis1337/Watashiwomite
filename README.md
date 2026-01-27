@@ -44,7 +44,7 @@ The key innovation is creating a correlation between MAL and Sonarr using TVDB a
 *At-a-glance statistics: Total Anime, Synced, Need Sync, and Errors*
 
 ### Dashboard - Your List
-![Dashboard - Your List](assets/screenshot-hero-stats.png)
+![Dashboard - Your List](assets/screenshot-dashboard.png)
 *Visual overview of your anime collection with sync status indicators*
 
 ### Sync Page
