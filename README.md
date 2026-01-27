@@ -64,39 +64,39 @@ The key innovation is creating a correlation between MAL and Sonarr using TVDB a
 ## Features
 
 ### Navigation & UI
-- 🎨 Modern navbar navigation with dedicated pages (Dashboard, Sync, Settings)
-- 📱 Fully responsive mobile design with hamburger menu
-- 🎭 Glassmorphic design with smooth animations
-- 🌊 Immersive hero section with profile background
-- ⚡ Active page indication and smooth transitions
-- 🚀 **First-time setup wizard** - Guided configuration with API key validation
+- Modern navbar navigation with dedicated pages (Dashboard, Sync, Settings)
+- Fully responsive mobile design with hamburger menu
+- Glassmorphic design with smooth animations
+- Immersive hero section with profile background
+- Active page indication and smooth transitions
+- **First-time setup wizard** - Guided configuration with API key validation
 
 ### Sync System
-- 🔄 Automatic sync between MAL and Sonarr
-- 🎯 Fuzzy title matching using Levenshtein distance
-- ⚙️ Customizable list selection (Watching, Completed, Plan to Watch, etc.)
-- 📊 4-stat overview: Total Anime, Synced, Need Sync, **Errors**
-- ❌ **Error tracking** - Separate display for failed syncs
-- 🗑️ Selective anime removal from Sonarr
-- 🔍 Sync preview mode
-- 📜 Sync history with audit trail
+- Automatic sync between MAL and Sonarr
+- Fuzzy title matching using Levenshtein distance
+- Customizable list selection (Watching, Completed, Plan to Watch, etc.)
+- 4-stat overview: Total Anime, Synced, Need Sync, **Errors**
+- **Error tracking** - Separate display for failed syncs
+- Selective anime removal from Sonarr
+- Sync preview mode
+- Sync history with audit trail
 
 ### Advanced Features
-- 🤖 Smart duplicate detection
-- 🎬 Batch actions (metadata refresh, episode search)
-- ⚖️ Conflict resolution strategies
-- ⭐ Score-based auto-monitoring
-- 🎯 Intelligent episode filtering (skip OVAs, specials, movies)
-- 💾 User preferences with 20+ configurable options
+- Smart duplicate detection
+- Batch actions (metadata refresh, episode search)
+- Conflict resolution strategies
+- Score-based auto-monitoring
+- Intelligent episode filtering (skip OVAs, specials, movies)
+- User preferences with 20+ configurable options
 
 ### Developer Features
-- 🔐 OAuth 2.0 authentication with MyAnimeList
-- 📚 Swagger API documentation
-- 🗄️ PostgreSQL with Prisma ORM
-- 🔒 Rate limiting and caching
-- 🏥 Health check endpoints
-- 🧪 **Comprehensive test suite** - 489 tests with 24.68% coverage (backend utilities at 96%+)
-- 🔧 **Modular architecture** - Clean separation of MAL, TVDB, and Sonarr utilities  
+- OAuth 2.0 authentication with MyAnimeList
+- Swagger API documentation
+- PostgreSQL with Prisma ORM
+- Rate limiting and caching
+- Health check endpoints
+- **Comprehensive test suite** - 489 tests with 24.68% coverage (backend utilities at 96%+)
+- **Modular architecture** - Clean separation of MAL, TVDB, and Sonarr utilities  
 
 ---
 
@@ -217,16 +217,16 @@ After setup completes:
 
 The app has three main sections accessible via the navbar:
 
-#### 📚 Your List (`/dashboard`)
+#### Your List (`/dashboard`)
 View your anime collection with:
 - **Hero Stats** - Total, Synced, Need Sync, and Errors count
 - **Anime Grid** - Visual cards with sync status
 - **Color Coding:**
-  - 🟢 Green border = Successfully synced
-  - 🔴 Red border = Not synced / Needs attention
-  - ❌ Error badge = Failed to sync
+  - Green border = Successfully synced
+  - Red border = Not synced / Needs attention
+  - Error badge = Failed to sync
 
-#### 🔄 Sync (`/sync`)
+#### Sync (`/sync`)
 Configure sync settings:
 - **List Selection** - Choose which MAL lists to sync
   - Watching
@@ -237,7 +237,7 @@ Configure sync settings:
 - **Sync Button** - Execute sync with unsync warning
 - **Anime Count** - See how many anime in each list
 
-#### ⚙️ Settings (`/settings`)
+#### Settings (`/settings`)
 - Configure MAL, Sonarr, and TVDB API settings
 - Test connections to verify your configuration
 - View your MAL profile information
@@ -249,9 +249,9 @@ Configure sync settings:
 The dashboard hero shows 4 key metrics:
 
 1. **Total Anime** - Number of anime from selected lists
-2. **Synced** ✅ - Anime successfully added to Sonarr
-3. **Need Sync** ⏳ - Anime not yet synced (will be added on next sync)
-4. **Errors** ❌ - Anime that failed to sync (e.g., not found on TVDB)
+2. **Synced** - Anime successfully added to Sonarr
+3. **Need Sync** - Anime not yet synced (will be added on next sync)
+4. **Errors** - Anime that failed to sync (e.g., not found on TVDB)
 
 > **Key Difference:** "Errors" are anime that have been **attempted** and failed, while "Need Sync" are anime that haven't been synced yet. This prevents confusion about which anime can't be synced vs which just need syncing.
 
