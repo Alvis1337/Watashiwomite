@@ -58,13 +58,66 @@ export default function SetupPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleNext = () => {
-    if (validateStep()) {
-      if (activeStep === steps.length - 1) {
-        handleSubmit();
-      } else {
-        setActiveStep((prev) => prev + 1);
+  const handleNext = async () => {
+    if (!validateStep()) {
+      return;
+    }
+
+    // Validate API keys before proceeding
+    if (activeStep === 1) {
+      // Validate Sonarr
+      setLoading(true);
+      try {
+        const response = await fetch(`${settings.sonarrUrl}/api/v3/system/status`, {
+          headers: { 'X-Api-Key': settings.sonarrApiKey },
+        });
+        
+        if (!response.ok) {
+          setErrors({ sonarrApiKey: 'Invalid Sonarr URL or API Key. Please check your configuration.' });
+          toast.error('Failed to connect to Sonarr');
+          setLoading(false);
+          return;
+        }
+        toast.success('Sonarr connection verified!');
+      } catch (error) {
+        setErrors({ sonarrUrl: 'Cannot reach Sonarr. Check URL and ensure Sonarr is running.' });
+        toast.error('Failed to connect to Sonarr');
+        setLoading(false);
+        return;
+      } finally {
+        setLoading(false);
       }
+    } else if (activeStep === 2) {
+      // Validate TVDB
+      setLoading(true);
+      try {
+        const response = await fetch('https://api4.thetvdb.com/v4/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apikey: settings.tvdbApiKey }),
+        });
+        
+        if (!response.ok) {
+          setErrors({ tvdbApiKey: 'Invalid TVDB API Key. Get a valid v4 key from thetvdb.com' });
+          toast.error('Invalid TVDB API Key');
+          setLoading(false);
+          return;
+        }
+        toast.success('TVDB API Key verified!');
+      } catch (error) {
+        setErrors({ tvdbApiKey: 'Failed to validate TVDB API Key. Check your internet connection.' });
+        toast.error('Failed to validate TVDB API Key');
+        setLoading(false);
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (activeStep === steps.length - 1) {
+      handleSubmit();
+    } else {
+      setActiveStep((prev) => prev + 1);
     }
   };
 

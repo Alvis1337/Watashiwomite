@@ -217,4 +217,43 @@ describe('MemoryCache', () => {
       expect(CacheTTL.tvdbSearch).toBe(86400000); // 24 hours
     });
   });
+
+  describe('cleanup()', () => {
+    it('should remove expired entries', () => {
+      cache.set('short1', 'value1', 1000);
+      cache.set('short2', 'value2', 1000);
+      cache.set('long', 'value3', 10000);
+
+      jest.advanceTimersByTime(2000); // Expire short TTL entries
+
+      cache.cleanup();
+
+      expect(cache.get('short1')).toBeNull();
+      expect(cache.get('short2')).toBeNull();
+      expect(cache.get('long')).toBe('value3');
+    });
+
+    it('should not remove non-expired entries', () => {
+      cache.set('key1', 'value1', 5000);
+      cache.set('key2', 'value2', 5000);
+
+      jest.advanceTimersByTime(2000); // Not enough to expire
+
+      cache.cleanup();
+
+      expect(cache.get('key1')).toBe('value1');
+      expect(cache.get('key2')).toBe('value2');
+    });
+
+    it('should handle empty cache', () => {
+      cache.clear();
+      expect(() => cache.cleanup()).not.toThrow();
+    });
+
+    it('should handle cache with no expired entries', () => {
+      cache.set('key1', 'value1', 10000);
+      cache.cleanup();
+      expect(cache.get('key1')).toBe('value1');
+    });
+  });
 });

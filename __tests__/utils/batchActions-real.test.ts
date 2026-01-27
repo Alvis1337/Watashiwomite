@@ -1,5 +1,6 @@
 /**
- * Real tests for utils/batchActions.ts
+ * REAL tests for batchActions.ts
+ * These import and execute actual functions with mocked dependencies
  */
 
 import {
@@ -8,53 +9,50 @@ import {
   backupCorrelationDatabase,
   executeAfterSyncActions,
 } from '@/utils/batchActions';
-import { writeFileSync } from 'fs';
+import fs from 'fs';
+import path from 'path';
 
 // Mock dependencies
-jest.mock('fs');
 jest.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     animeList: {
-      findMany: jest.fn(),
+      findUnique: jest.fn(),
     },
   },
 }));
 
-import prisma from '@/lib/prisma';
-
-const mockPrisma = prisma as jest.Mocked<typeof prisma>;
-const mockWriteFileSync = writeFileSync as jest.MockedFunction<typeof writeFileSync>;
-
-global.fetch = jest.fn();
-const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+global.fetch = jest.fn() as jest.Mock;
 
 describe('Batch Actions - REAL', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (global.fetch as jest.Mock).mockReset();
   });
 
   describe('refreshMetadataForSeries()', () => {
-    it('should refresh metadata for series', async () => {
-      mockFetch.mockResolvedValueOnce({
+    it('should return success with 0 count for empty array', async () => {
+      const result = await refreshMetadataForSeries([], 'api-key', 'http://localhost');
+      
+      expect(result).toEqual({ success: true, count: 0 });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should successfully refresh metadata', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-      } as Response);
+      });
 
-      const result = await refreshMetadataForSeries(
-        [1, 2, 3],
-        'test-api-key',
-        'http://localhost:8989'
-      );
+      const result = await refreshMetadataForSeries([1, 2, 3], 'api-key', 'http://localhost');
 
-      expect(result.success).toBe(true);
-      expect(result.count).toBe(3);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8989/api/v3/command',
+      expect(result).toEqual({ success: true, count: 3 });
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost/api/v3/command',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Api-Key': 'test-api-key',
+            'X-Api-Key': 'api-key',
           },
           body: JSON.stringify({
             name: 'RefreshSeries',
@@ -64,162 +62,402 @@ describe('Batch Actions - REAL', () => {
       );
     });
 
-    it('should handle empty series list', async () => {
-      const result = await refreshMetadataForSeries([], 'key', 'url');
+    it('should handle API error response', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
-      expect(result.success).toBe(true);
-      expect(result.count).toBe(0);
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('should handle API errors', async () => {
-      mockFetch.mockResolvedValueOnce({
+      (global.fetch as jest.Mock).mockResolvedValue({
         ok: false,
-        text: async () => 'API Error',
-      } as Response);
+        text: jest.fn().mockResolvedValue('API Error'),
+      });
 
-      const result = await refreshMetadataForSeries([1], 'key', 'url');
+      const result = await refreshMetadataForSeries([1], 'api-key', 'http://localhost');
 
-      expect(result.success).toBe(false);
-      expect(result.count).toBe(0);
+      expect(result).toEqual({ success: false, count: 0 });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[BatchActions] Failed to queue metadata refresh:',
+        'API Error'
+      );
+
+      consoleErrorSpy.mockRestore();
     });
 
-    it('should handle network errors', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+    it('should handle network error', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
-      const result = await refreshMetadataForSeries([1], 'key', 'url');
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
 
-      expect(result.success).toBe(false);
-      expect(result.count).toBe(0);
+      const result = await refreshMetadataForSeries([1], 'api-key', 'http://localhost');
+
+      expect(result).toEqual({ success: false, count: 0 });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[BatchActions] Error refreshing metadata:',
+        expect.any(Error)
+      );
+
+      consoleErrorSpy.mockRestore();
     });
   });
 
   describe('searchForNewlyAddedSeries()', () => {
-    it('should search for newly added series', async () => {
-      mockFetch.mockResolvedValueOnce({
+    it('should return success with 0 count for empty array', async () => {
+      const result = await searchForNewlyAddedSeries([], 'api-key', 'http://localhost');
+
+      expect(result).toEqual({ success: true, count: 0 });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should successfully search for episodes', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-      } as Response);
+      });
 
-      const result = await searchForNewlyAddedSeries(
-        [1, 2],
-        'test-api-key',
-        'http://localhost:8989'
-      );
+      const result = await searchForNewlyAddedSeries([1, 2], 'api-key', 'http://localhost');
 
-      expect(result.success).toBe(true);
-      expect(result.count).toBe(2);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8989/api/v3/command',
-        expect.objectContaining({
+      expect(result).toEqual({ success: true, count: 2 });
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost/api/v3/command',
+        {
           method: 'POST',
-        })
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Api-Key': 'api-key',
+          },
+          body: JSON.stringify({
+            name: 'SeriesSearch',
+            seriesIds: [1, 2],
+          }),
+        }
       );
     });
 
-    it('should handle empty series list', async () => {
-      const result = await searchForNewlyAddedSeries([], 'key', 'url');
+    it('should handle API error response', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
-      expect(result.success).toBe(true);
-      expect(result.count).toBe(0);
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        text: jest.fn().mockResolvedValue('Search failed'),
+      });
+
+      const result = await searchForNewlyAddedSeries([1], 'api-key', 'http://localhost');
+
+      expect(result).toEqual({ success: false, count: 0 });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[BatchActions] Failed to queue episode search:',
+        'Search failed'
+      );
+
+      consoleErrorSpy.mockRestore();
     });
 
-    it('should handle errors', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Error'));
+    it('should handle network error', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
-      const result = await searchForNewlyAddedSeries([1], 'key', 'url');
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('Error'));
 
-      expect(result.success).toBe(false);
+      const result = await searchForNewlyAddedSeries([1], 'api-key', 'http://localhost');
+
+      expect(result).toEqual({ success: false, count: 0 });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[BatchActions] Error searching for episodes:',
+        expect.any(Error)
+      );
+
+      consoleErrorSpy.mockRestore();
     });
   });
 
   describe('backupCorrelationDatabase()', () => {
-    it('should backup database', async () => {
-      mockPrisma.animeList.findMany.mockResolvedValue([
-        {
-          id: 1,
-          malId: 123,
-          tvdbId: 456,
-          title: 'Test Anime',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ]);
+    const mockAnimeList = {
+      username: 'testuser',
+      anime: [
+        { malId: 1, title: 'Naruto' },
+        { malId: 2, title: 'Bleach' },
+      ],
+      sonarrSeries: [
+        { id: 1, title: 'Naruto', tvdbId: 123, malId: 1, path: '/anime/naruto', monitored: true },
+      ],
+    };
 
-      const result = await backupCorrelationDatabase();
+    it('should successfully backup database', async () => {
+      const prisma = require('@/lib/prisma').default;
+      prisma.animeList.findUnique.mockResolvedValue(mockAnimeList);
+
+      const writeFileSyncSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation();
+      const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+      const result = await backupCorrelationDatabase('testuser');
 
       expect(result.success).toBe(true);
-      expect(result.filePath).toBeDefined();
-      expect(mockWriteFileSync).toHaveBeenCalled();
+      expect(result.filePath).toMatch(/correlation-backup-testuser-\d+\.json/);
+      expect(prisma.animeList.findUnique).toHaveBeenCalledWith({
+        where: { username: 'testuser' },
+        include: {
+          anime: true,
+          sonarrSeries: {
+            select: {
+              id: true,
+              title: true,
+              tvdbId: true,
+              malId: true,
+              path: true,
+              monitored: true,
+            },
+          },
+        },
+      });
+
+      const writeCall = writeFileSyncSpy.mock.calls[0];
+      expect(writeCall[0]).toMatch(/backups\/correlation-backup-testuser/);
+      
+      const backupData = JSON.parse(writeCall[1] as string);
+      expect(backupData).toHaveProperty('username', 'testuser');
+      expect(backupData).toHaveProperty('backedUpAt');
+      expect(backupData).toHaveProperty('animeCount', 2);
+      expect(backupData).toHaveProperty('sonarrSeriesCount', 1);
+      expect(backupData).toHaveProperty('anime');
+      expect(backupData).toHaveProperty('sonarrSeries');
+
+      writeFileSyncSpy.mockRestore();
+      existsSyncSpy.mockRestore();
     });
 
-    it('should handle database errors', async () => {
-      mockPrisma.animeList.findMany.mockRejectedValue(new Error('DB error'));
+    it('should return failure if anime list not found', async () => {
+      const prisma = require('@/lib/prisma').default;
+      prisma.animeList.findUnique.mockResolvedValue(null);
 
-      const result = await backupCorrelationDatabase();
+      const result = await backupCorrelationDatabase('nonexistent');
 
-      expect(result.success).toBe(false);
+      expect(result).toEqual({ success: false });
+    });
+
+    it('should handle database error', async () => {
+      const prisma = require('@/lib/prisma').default;
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      prisma.animeList.findUnique.mockRejectedValue(new Error('DB error'));
+
+      const result = await backupCorrelationDatabase('testuser');
+
+      expect(result).toEqual({ success: false });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[BatchActions] Error backing up database:',
+        expect.any(Error)
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should create backup directory if it does not exist', async () => {
+      const prisma = require('@/lib/prisma').default;
+      prisma.animeList.findUnique.mockResolvedValue(mockAnimeList);
+
+      const writeFileSyncSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation();
+      const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+      const mkdirSyncSpy = jest.spyOn(fs, 'mkdirSync').mockImplementation();
+
+      const result = await backupCorrelationDatabase('testuser');
+
+      expect(result.success).toBe(true);
+      expect(mkdirSyncSpy).toHaveBeenCalledWith(
+        expect.stringContaining('backups'),
+        { recursive: true }
+      );
+
+      writeFileSyncSpy.mockRestore();
+      existsSyncSpy.mockRestore();
+      mkdirSyncSpy.mockRestore();
+    });
+
+    it('should handle directory creation error', async () => {
+      const prisma = require('@/lib/prisma').default;
+      prisma.animeList.findUnique.mockResolvedValue(mockAnimeList);
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      const writeFileSyncSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation();
+      const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+      const mkdirSyncSpy = jest.spyOn(fs, 'mkdirSync').mockImplementation(() => {
+        throw new Error('Permission denied');
+      });
+
+      const result = await backupCorrelationDatabase('testuser');
+
+      expect(result.success).toBe(true);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[BatchActions] Failed to create backup directory:',
+        expect.any(Error)
+      );
+
+      consoleErrorSpy.mockRestore();
+      writeFileSyncSpy.mockRestore();
+      existsSyncSpy.mockRestore();
+      mkdirSyncSpy.mockRestore();
     });
   });
 
   describe('executeAfterSyncActions()', () => {
-    it('should execute all after-sync actions', async () => {
-      const seriesIds = [1, 2, 3];
-      const config = {
-        refreshMetadata: true,
-        searchForEpisodes: true,
-        backupDatabase: true,
+    it('should execute all enabled actions', async () => {
+      const prisma = require('@/lib/prisma').default;
+      prisma.animeList.findUnique.mockResolvedValue({
+        username: 'testuser',
+        anime: [],
+        sonarrSeries: [],
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+
+      const writeFileSyncSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation();
+      const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+      const preferences = {
+        afterSyncRefreshMetadata: true,
+        afterSyncSearchMissing: true,
+        afterSyncBackupDatabase: true,
       };
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-      } as Response);
-
-      mockPrisma.animeList.findMany.mockResolvedValue([]);
-
-      const result = await executeAfterSyncActions(
-        seriesIds,
-        'key',
-        'http://localhost:8989',
-        config
+      await executeAfterSyncActions(
+        preferences,
+        [1, 2],
+        'testuser',
+        'api-key',
+        'http://localhost'
       );
 
-      expect(result.refreshed).toBe(3);
-      expect(result.searched).toBe(3);
-      expect(result.backed_up).toBe(true);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(prisma.animeList.findUnique).toHaveBeenCalled();
+
+      writeFileSyncSpy.mockRestore();
+      existsSyncSpy.mockRestore();
     });
 
-    it('should skip actions based on config', async () => {
-      const seriesIds = [1];
-      const config = {
-        refreshMetadata: false,
-        searchForEpisodes: false,
-        backupDatabase: false,
+    it('should skip disabled actions', async () => {
+      const preferences = {
+        afterSyncRefreshMetadata: false,
+        afterSyncSearchMissing: false,
+        afterSyncBackupDatabase: false,
       };
 
-      const result = await executeAfterSyncActions(seriesIds, 'key', 'url', config);
+      await executeAfterSyncActions(
+        preferences,
+        [1, 2],
+        'testuser',
+        'api-key',
+        'http://localhost'
+      );
 
-      expect(result.refreshed).toBe(0);
-      expect(result.searched).toBe(0);
-      expect(result.backed_up).toBe(false);
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('should handle errors gracefully', async () => {
-      const seriesIds = [1];
-      const config = {
-        refreshMetadata: true,
-        searchForEpisodes: true,
-        backupDatabase: true,
+    it('should handle individual action failures gracefully', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      const preferences = {
+        afterSyncRefreshMetadata: true,
+        afterSyncSearchMissing: true,
+        afterSyncBackupDatabase: false,
       };
 
-      mockFetch.mockRejectedValue(new Error('Network error'));
-      mockPrisma.animeList.findMany.mockRejectedValue(new Error('DB error'));
+      await executeAfterSyncActions(
+        preferences,
+        [1],
+        'testuser',
+        'api-key',
+        'http://localhost'
+      );
 
-      const result = await executeAfterSyncActions(seriesIds, 'key', 'url', config);
+      expect(consoleErrorSpy).toHaveBeenCalled();
 
-      expect(result.refreshed).toBe(0);
-      expect(result.searched).toBe(0);
-      expect(result.backed_up).toBe(false);
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should execute only metadata refresh when enabled', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+
+      const preferences = {
+        afterSyncRefreshMetadata: true,
+        afterSyncSearchMissing: false,
+        afterSyncBackupDatabase: false,
+      };
+
+      await executeAfterSyncActions(
+        preferences,
+        [1, 2, 3],
+        'testuser',
+        'api-key',
+        'http://localhost'
+      );
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost/api/v3/command',
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: 'RefreshSeries',
+            seriesIds: [1, 2, 3],
+          }),
+        })
+      );
+    });
+
+    it('should execute only search when enabled', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+
+      const preferences = {
+        afterSyncRefreshMetadata: false,
+        afterSyncSearchMissing: true,
+        afterSyncBackupDatabase: false,
+      };
+
+      await executeAfterSyncActions(
+        preferences,
+        [1],
+        'testuser',
+        'api-key',
+        'http://localhost'
+      );
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost/api/v3/command',
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: 'SeriesSearch',
+            seriesIds: [1],
+          }),
+        })
+      );
+    });
+
+    it('should execute only backup when enabled', async () => {
+      const prisma = require('@/lib/prisma').default;
+      prisma.animeList.findUnique.mockResolvedValue({
+        username: 'testuser',
+        anime: [],
+        sonarrSeries: [],
+      });
+
+      const writeFileSyncSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation();
+      const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+      const preferences = {
+        afterSyncRefreshMetadata: false,
+        afterSyncSearchMissing: false,
+        afterSyncBackupDatabase: true,
+      };
+
+      await executeAfterSyncActions(
+        preferences,
+        [1],
+        'testuser',
+        'api-key',
+        'http://localhost'
+      );
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(prisma.animeList.findUnique).toHaveBeenCalled();
+
+      writeFileSyncSpy.mockRestore();
+      existsSyncSpy.mockRestore();
     });
   });
 });

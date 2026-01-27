@@ -156,7 +156,9 @@ export const GET = withAPIMiddleware(async (req: NextRequest) => {
   }
 
   if (!animeListObject) {
-    return errorResponse('Anime list not found. Please try syncing again.', 404);
+    // Return empty array instead of 404 for better UX
+    // This happens on first load before sync completes
+    return NextResponse.json({ animeList: [] }, { status: 200 });
   }
 
   // Fetch the updated list from database (already saved by getMALAnimeList)

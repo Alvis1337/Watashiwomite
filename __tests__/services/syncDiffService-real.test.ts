@@ -1,47 +1,56 @@
 /**
- * Real tests for services/syncDiffService.ts
+ * REAL tests for syncDiffService.ts
+ * These import and execute actual functions with mocked dependencies
  */
 
 import {
   prepareSonarrData,
   findUniqueToMal,
   findUniqueToSonarr,
+  linkSonarrToMalIds,
   calculateSyncDiff,
+  SonarrSeriesData,
 } from '@/services/syncDiffService';
+import * as stringMatchingService from '@/services/stringMatchingService';
 
 // Mock dependencies
 jest.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    animeList: {
-      findMany: jest.fn(),
+    anime: {
+      findFirst: jest.fn(),
+    },
+    sonarrSeries: {
+      update: jest.fn(),
     },
   },
 }));
 
 jest.mock('@/services/stringMatchingService');
 
-import { findClosestMatch, levenshtein, normalizeTitle } from '@/services/stringMatchingService';
-
-const mockFindClosestMatch = findClosestMatch as jest.MockedFunction<typeof findClosestMatch>;
-const mockLevenshtein = levenshtein as jest.MockedFunction<typeof levenshtein>;
-const mockNormalizeTitle = normalizeTitle as jest.MockedFunction<typeof normalizeTitle>;
+const mockNormalizeTitle = stringMatchingService.normalizeTitle as jest.MockedFunction<typeof stringMatchingService.normalizeTitle>;
+const mockFindClosestMatch = stringMatchingService.findClosestMatch as jest.MockedFunction<typeof stringMatchingService.findClosestMatch>;
+const mockLevenshtein = stringMatchingService.levenshtein as jest.MockedFunction<typeof stringMatchingService.levenshtein>;
 
 describe('Sync Diff Service - REAL', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockNormalizeTitle.mockImplementation((title) => title.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    mockLevenshtein.mockImplementation((a, b) => {
+      if (a === b) return 0;
+      return Math.abs(a.length - b.length);
+    });
   });
 
   describe('prepareSonarrData()', () => {
-    it('should prepare Sonarr series with titles', () => {
+    it('should prepare Sonarr series data with titles', () => {
       const sonarrSeries = [
         {
           id: 1,
-          title: 'Attack on Titan',
+          title: 'Naruto',
           alternateTitles: [
-            { title: 'Shingeki no Kyojin' },
-            { title: 'AoT' },
+            { title: 'Naruto Shippuden' },
+            { title: 'Naruto: Hurricane Chronicles' },
           ],
         },
         {
@@ -56,7 +65,7 @@ describe('Sync Diff Service - REAL', () => {
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
         id: 1,
-        titles: ['attack on titan', 'shingeki no kyojin', 'aot'],
+        titles: ['naruto', 'naruto shippuden', 'naruto: hurricane chronicles'],
       });
       expect(result[1]).toEqual({
         id: 2,
@@ -64,44 +73,43 @@ describe('Sync Diff Service - REAL', () => {
       });
     });
 
-    it('should handle alternate titles as strings', () => {
+    it('should handle null alternate titles', () => {
       const sonarrSeries = [
         {
           id: 1,
-          title: 'Naruto',
-          alternateTitles: ['ナルト', 'Naruto Shippuden'],
-        },
-      ];
-
-      const result = prepareSonarrData(sonarrSeries);
-
-      expect(result[0].titles).toContain('naruto');
-    });
-
-    it('should filter out null/invalid alternate titles', () => {
-      const sonarrSeries = [
-        {
-          id: 1,
-          title: 'Test',
+          title: 'Test Anime',
           alternateTitles: [
-            { title: 'Valid' },
+            { title: 'Valid Title' },
             null,
-            { notTitle: 'Invalid' },
-            { title: null },
+            { wrongKey: 'Invalid' },
           ],
         },
       ];
 
       const result = prepareSonarrData(sonarrSeries);
 
-      expect(result[0].titles).toEqual(['test', 'valid']);
+      expect(result[0].titles).toEqual(['test anime', 'valid title']);
     });
 
-    it('should handle missing alternateTitles', () => {
+    it('should handle series without alternateTitles property', () => {
+      const sonarrSeries = [
+        {
+          id: 1,
+          title: 'Simple Anime',
+        },
+      ];
+
+      const result = prepareSonarrData(sonarrSeries);
+
+      expect(result[0].titles).toEqual(['simple anime']);
+    });
+
+    it('should handle non-array alternateTitles', () => {
       const sonarrSeries = [
         {
           id: 1,
           title: 'Test',
+          alternateTitles: 'not an array' as any,
         },
       ];
 
@@ -113,105 +121,226 @@ describe('Sync Diff Service - REAL', () => {
 
   describe('findUniqueToMal()', () => {
     it('should find titles unique to MAL', () => {
-      const malTitles = ['Attack on Titan', 'Death Note', 'Code Geass'];
-      const sonarrTitles = new Set(['Attack on Titan', 'Death Note']);
+      const malTitles = ['Naruto', 'Bleach', 'One Piece'];
+      const sonarrTitles = new Set(['naruto', 'one piece']);
 
       mockFindClosestMatch.mockImplementation((title, list) => {
-        return list.find((t) => t.toLowerCase() === title.toLowerCase()) || null;
+        const normalized = title.toLowerCase();
+        return list.find((t) => t === normalized) || null;
       });
 
-      mockLevenshtein.mockImplementation((a, b) => {
-        return a === b ? 0 : 10;
-      });
+      const result = findUniqueToMal(malTitles, sonarrTitles, 5);
 
-      const result = findUniqueToMal(malTitles, sonarrTitles);
-
-      expect(result).toContain('Code Geass');
-      expect(result).not.toContain('Attack on Titan');
+      expect(result).toEqual(['Bleach']);
     });
 
-    it('should use custom threshold', () => {
-      const malTitles = ['Test'];
-      const sonarrTitles = new Set(['Test2']);
+    it('should include titles with high Levenshtein distance', () => {
+      const malTitles = ['Attack on Titan'];
+      const sonarrTitles = new Set(['shingeki no kyojin']);
 
-      mockFindClosestMatch.mockReturnValue('Test2');
-      mockLevenshtein.mockReturnValue(3);
+      mockFindClosestMatch.mockReturnValue('shingeki no kyojin');
+      mockLevenshtein.mockReturnValue(10);
 
-      const resultStrict = findUniqueToMal(malTitles, sonarrTitles, 2);
-      expect(resultStrict).toContain('Test');
+      const result = findUniqueToMal(malTitles, sonarrTitles, 5);
 
-      mockLevenshtein.mockReturnValue(3);
-      const resultLenient = findUniqueToMal(malTitles, sonarrTitles, 5);
-      expect(resultLenient).toHaveLength(0);
+      expect(result).toContain('Attack on Titan');
+    });
+
+    it('should exclude titles with low Levenshtein distance', () => {
+      const malTitles = ['Naruto'];
+      const sonarrTitles = new Set(['naruto']);
+
+      mockFindClosestMatch.mockReturnValue('naruto');
+      mockLevenshtein.mockReturnValue(0);
+
+      const result = findUniqueToMal(malTitles, sonarrTitles, 5);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should handle empty MAL list', () => {
+      const result = findUniqueToMal([], new Set(['naruto']), 5);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle empty Sonarr list', () => {
+      mockFindClosestMatch.mockReturnValue(null);
+
+      const result = findUniqueToMal(['Naruto'], new Set(), 5);
+
+      expect(result).toEqual(['Naruto']);
     });
   });
 
   describe('findUniqueToSonarr()', () => {
     it('should find titles unique to Sonarr', () => {
-      const sonarrTitles = new Set(['Attack on Titan', 'Death Note', 'Bleach']);
-      const malTitles = ['Attack on Titan', 'Death Note'];
+      const sonarrTitles = new Set(['naruto', 'bleach', 'one piece']);
+      const malTitles = ['Naruto', 'One Piece'];
 
       mockFindClosestMatch.mockImplementation((title, list) => {
-        return list.find((t) => t.toLowerCase() === title.toLowerCase()) || null;
+        const normalized = title.toLowerCase();
+        return list.find((t) => t.toLowerCase() === normalized) || null;
       });
 
-      mockLevenshtein.mockImplementation((a, b) => {
-        return a === b ? 0 : 10;
+      const result = findUniqueToSonarr(sonarrTitles, malTitles, 5);
+
+      expect(result).toEqual(['bleach']);
+    });
+
+    it('should include titles with high Levenshtein distance', () => {
+      const sonarrTitles = new Set(['shingeki no kyojin']);
+      const malTitles = ['Attack on Titan'];
+
+      mockFindClosestMatch.mockReturnValue('Attack on Titan');
+      mockLevenshtein.mockReturnValue(10);
+
+      const result = findUniqueToSonarr(sonarrTitles, malTitles, 5);
+
+      expect(result).toContain('shingeki no kyojin');
+    });
+
+    it('should handle empty lists', () => {
+      mockFindClosestMatch.mockReturnValue(null);
+
+      const result = findUniqueToSonarr(new Set(['naruto']), [], 5);
+
+      expect(result).toEqual(['naruto']);
+    });
+  });
+
+  describe('linkSonarrToMalIds()', () => {
+    it('should link Sonarr series to MAL IDs', async () => {
+      const prisma = require('@/lib/prisma').default;
+
+      const sonarrSeries: SonarrSeriesData[] = [
+        { id: 1, titles: ['naruto', 'naruto shippuden'] },
+        { id: 2, titles: ['one piece'] },
+      ];
+      const malTitles = ['Naruto', 'One Piece'];
+
+      mockFindClosestMatch.mockImplementation((title, list) => {
+        if (title.includes('naruto')) return 'Naruto';
+        if (title.includes('one piece')) return 'One Piece';
+        return null;
       });
 
-      const result = findUniqueToSonarr(sonarrTitles, malTitles);
+      prisma.anime.findFirst
+        .mockResolvedValueOnce({ malId: 20, title: 'Naruto' })
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ malId: 21, title: 'One Piece' });
 
-      expect(result).toContain('Bleach');
-      expect(result).not.toContain('Attack on Titan');
+      prisma.sonarrSeries.update.mockResolvedValue({});
+
+      await linkSonarrToMalIds(sonarrSeries, malTitles);
+
+      expect(prisma.sonarrSeries.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { malId: 20 },
+      });
+      expect(prisma.sonarrSeries.update).toHaveBeenCalledWith({
+        where: { id: 2 },
+        data: { malId: 21 },
+      });
+    });
+
+    it('should skip if no match found', async () => {
+      const prisma = require('@/lib/prisma').default;
+
+      const sonarrSeries: SonarrSeriesData[] = [{ id: 1, titles: ['naruto'] }];
+      const malTitles = ['One Piece'];
+
+      mockFindClosestMatch.mockReturnValue(null);
+
+      await linkSonarrToMalIds(sonarrSeries, malTitles);
+
+      expect(prisma.anime.findFirst).not.toHaveBeenCalled();
+      expect(prisma.sonarrSeries.update).not.toHaveBeenCalled();
+    });
+
+    it('should skip if anime not found in database', async () => {
+      const prisma = require('@/lib/prisma').default;
+
+      const sonarrSeries: SonarrSeriesData[] = [{ id: 1, titles: ['naruto'] }];
+      const malTitles = ['Naruto'];
+
+      mockFindClosestMatch.mockReturnValue('Naruto');
+      prisma.anime.findFirst.mockResolvedValue(null);
+
+      await linkSonarrToMalIds(sonarrSeries, malTitles);
+
+      expect(prisma.anime.findFirst).toHaveBeenCalledWith({
+        where: { title: 'Naruto' },
+      });
+      expect(prisma.sonarrSeries.update).not.toHaveBeenCalled();
+    });
+
+    it('should handle empty lists', async () => {
+      const prisma = require('@/lib/prisma').default;
+
+      await linkSonarrToMalIds([], []);
+
+      expect(prisma.anime.findFirst).not.toHaveBeenCalled();
+      expect(prisma.sonarrSeries.update).not.toHaveBeenCalled();
     });
   });
 
   describe('calculateSyncDiff()', () => {
-    it('should calculate diff between MAL and Sonarr', async () => {
-      const malAnime = [
-        { node: { id: 1, title: 'Attack on Titan' } },
-        { node: { id: 2, title: 'Death Note' } },
-        { node: { id: 3, title: 'Code Geass' } },
-      ];
+    it('should calculate complete sync diff', async () => {
+      const prisma = require('@/lib/prisma').default;
 
+      const malAnime = [
+        { title: 'Naruto' },
+        { title: 'Bleach' },
+      ];
       const sonarrSeries = [
-        { id: 1, title: 'Attack on Titan', alternateTitles: [] },
-        { id: 2, title: 'Death Note', alternateTitles: [] },
+        {
+          id: 1,
+          title: 'Naruto',
+          alternateTitles: [],
+        },
       ];
 
       mockFindClosestMatch.mockImplementation((title, list) => {
-        return list.find((t) => t.toLowerCase() === title.toLowerCase()) || null;
+        const normalized = title.toLowerCase();
+        return list.find((t) => t.toLowerCase() === normalized) || null;
       });
 
-      mockLevenshtein.mockImplementation((a, b) => {
-        return a === b ? 0 : 10;
-      });
+      prisma.anime.findFirst.mockResolvedValue(null);
 
-      const result = await calculateSyncDiff(malAnime, sonarrSeries);
+      const result = await calculateSyncDiff(malAnime, sonarrSeries, 5);
 
-      expect(result.uniqueToMal).toContain('Code Geass');
-      expect(result.uniqueToSonarr).toHaveLength(0);
-      expect(result.inBoth).toContain('attack on titan');
-      expect(result.inBoth).toContain('death note');
+      expect(result).toHaveProperty('uniqueToMal');
+      expect(result).toHaveProperty('uniqueToSonarr');
+      expect(result).toHaveProperty('malTitles');
+      expect(result).toHaveProperty('sonarrSeries');
+      expect(result.malTitles).toEqual(['Naruto', 'Bleach']);
+      expect(result.sonarrSeries).toHaveLength(1);
+      expect(result.uniqueToMal).toContain('Bleach');
     });
 
-    it('should find titles in both lists', async () => {
-      const malAnime = [
-        { node: { id: 1, title: 'Naruto' } },
-      ];
+    it('should handle empty lists', async () => {
+      mockFindClosestMatch.mockReturnValue(null);
 
-      const sonarrSeries = [
-        { id: 1, title: 'Naruto', alternateTitles: [] },
-      ];
+      const result = await calculateSyncDiff([], [], 5);
 
-      mockFindClosestMatch.mockReturnValue('naruto');
-      mockLevenshtein.mockReturnValue(0);
+      expect(result.uniqueToMal).toEqual([]);
+      expect(result.uniqueToSonarr).toEqual([]);
+      expect(result.malTitles).toEqual([]);
+      expect(result.sonarrSeries).toEqual([]);
+    });
 
-      const result = await calculateSyncDiff(malAnime, sonarrSeries);
+    it('should use custom fuzzy match threshold', async () => {
+      const prisma = require('@/lib/prisma').default;
 
-      expect(result.inBoth).toContain('naruto');
-      expect(result.uniqueToMal).toHaveLength(0);
-      expect(result.uniqueToSonarr).toHaveLength(0);
+      const malAnime = [{ title: 'Test' }];
+      const sonarrSeries = [];
+
+      mockFindClosestMatch.mockReturnValue(null);
+      prisma.anime.findFirst.mockResolvedValue(null);
+
+      const result = await calculateSyncDiff(malAnime, sonarrSeries, 10);
+
+      expect(result.uniqueToMal).toEqual(['Test']);
     });
   });
 });

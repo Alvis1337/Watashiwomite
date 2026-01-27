@@ -8,6 +8,7 @@ jest.mock('@/lib/prisma', () => ({
       findUnique: jest.fn(),
       upsert: jest.fn(),
       count: jest.fn(),
+      delete: jest.fn(),
     },
   },
 }));
@@ -166,6 +167,46 @@ describe('Settings - REAL', () => {
       const result = await hasSettings();
 
       expect(result).toBe(false);
+    });
+
+    it('should return false and log error on database error', async () => {
+      mockPrisma.appSettings.findUnique.mockRejectedValue(new Error('DB error'));
+
+      const result = await hasSettings();
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('deleteSettings()', () => {
+    it('should delete settings from database', async () => {
+      mockPrisma.appSettings.delete.mockResolvedValue({
+        id: 1,
+        username: 'system',
+        malClientId: 'test',
+        malClientSecret: 'test',
+        malRedirectUri: 'test',
+        sonarrUrl: 'test',
+        sonarrApiKey: 'test',
+        tvdbApiKey: 'test',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const { deleteSettings } = require('@/lib/settings');
+      await deleteSettings();
+
+      expect(mockPrisma.appSettings.delete).toHaveBeenCalledWith({
+        where: { username: 'system' },
+      });
+    });
+
+    it('should throw error if delete fails', async () => {
+      mockPrisma.appSettings.delete.mockRejectedValue(new Error('Delete failed'));
+
+      const { deleteSettings } = require('@/lib/settings');
+
+      await expect(deleteSettings()).rejects.toThrow('Delete failed');
     });
   });
 });

@@ -7,6 +7,7 @@ import { getTvdbIds, getSonarrRootFolder } from '@/utils/utils';
 import { addAnimeToSonarrEnhanced } from '@/utils/enhancedSync';
 import { logSyncHistory, SyncChange } from '@/utils/syncHistory';
 import { executeAfterSyncActions } from '@/utils/batchActions';
+import { getSettings } from '@/lib/settings';
 import type { Anime } from '@/types/interfaces';
 import type { SyncPreferences } from './preferencesService';
 
@@ -101,7 +102,8 @@ async function logSyncIfEnabled(
 async function executeBatchActionsIfEnabled(
   preferences: SyncPreferences,
   results: SyncResult[],
-  username: string
+  username: string,
+  settings: Awaited<ReturnType<typeof getSettings>>
 ): Promise<void> {
   const addedSonarrIds = results
     .filter((r) => r.success && r.sonarrId)
@@ -188,7 +190,7 @@ export async function performSync(
   await logSyncIfEnabled(preferences, username, results, enrichedSeries);
 
   // Execute batch actions if enabled
-  await executeBatchActionsIfEnabled(preferences, results, username);
+  await executeBatchActionsIfEnabled(preferences, results, username, settings);
 
   return results;
 }

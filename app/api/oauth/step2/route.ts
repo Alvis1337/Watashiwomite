@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { serialize } from 'cookie';
 import { getSettings } from '@/lib/settings';
+import { getMALAnimeList } from '@/utils/mal';
 
 const tokenEndpoint = 'https://myanimelist.net/v1/oauth2/token';
 
@@ -117,6 +118,15 @@ export async function GET(req: NextRequest) {
           refreshToken: tokenData.refresh_token,
         },
       });
+
+      // Fetch MAL anime list immediately so data is ready when user lands on dashboard
+      try {
+        await getMALAnimeList(tokenData.access_token, username);
+        console.log(`[OAuth] Successfully fetched MAL anime list for ${username}`);
+      } catch (error) {
+        console.error('[OAuth] Failed to fetch MAL anime list during OAuth:', error);
+        // Don't fail the OAuth flow if MAL fetch fails - user can sync later
+      }
 
       const serializedCookie = serialize('authToken', tokenData.access_token, {
         httpOnly: true,

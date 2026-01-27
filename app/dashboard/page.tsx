@@ -25,7 +25,7 @@ interface UserData {
 }
 
 export default function DashboardPage() {
-    const [userAnimeList, setUserAnimeList] = useState<Anime[]>();
+    const [userAnimeList, setUserAnimeList] = useState<Anime[] | null>(null);
     const [userSonarrList, setUserSonarrList] = useState<SonarrSeries[]>();
     const [syncErrors, setSyncErrors] = useState<Array<{ malId: number; title: string; reason: string }>>([]);
     const { logout, isAuthenticated, isLoading } = useAuth();
@@ -89,8 +89,7 @@ export default function DashboardPage() {
             const response = await fetch(`/api/mal?username=${username}`);
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `HTTP ${response.status}`);
+                throw new Error(`HTTP ${response.status}`);
             }
 
             const data = await response.json();
@@ -257,13 +256,31 @@ export default function DashboardPage() {
                         <Box sx={{ textAlign: 'center', py: 4 }}>
                             <Typography variant="h6">Loading anime list...</Typography>
                         </Box>
-                    ) : userAnimeList && userSonarrList ? (
+                    ) : userAnimeList !== null && userAnimeList.length === 0 ? (
+                        <Box sx={{ 
+                            textAlign: 'center', 
+                            py: 8,
+                            px: 3,
+                            maxWidth: 600,
+                            mx: 'auto',
+                            background: 'rgba(99, 102, 241, 0.05)',
+                            borderRadius: 2,
+                            border: '1px solid rgba(99, 102, 241, 0.2)'
+                        }}>
+                            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+                                Welcome to Watashiwomite! 🎌
+                            </Typography>
+                            <Typography variant="body1" sx={{ mb: 3, color: 'rgba(255,255,255,0.7)' }}>
+                                Your anime collection is empty. Click the Sync button in the hero section above to import your MyAnimeList and start managing your anime library!
+                            </Typography>
+                        </Box>
+                    ) : userAnimeList && userAnimeList.length > 0 && userSonarrList ? (
                         <DisplayAnimeList 
                             animeList={filteredAnimeList} 
                             sonarrList={userSonarrList}
                             syncErrors={syncErrors}
                         />
-                    ) : userAnimeList ? (
+                    ) : userAnimeList && userAnimeList.length > 0 ? (
                         <Box sx={{ textAlign: 'center', py: 4 }}>
                             <Typography variant="body1">
                                 Loading Sonarr data...
