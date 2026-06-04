@@ -1,7 +1,5 @@
 package com.chrisalvis.watashiwomite.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -31,15 +29,6 @@ fun SetupScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // Open MAL auth URL in browser when it becomes available
-    LaunchedEffect(state.authUrl) {
-        if (state.authUrl.isNotBlank()) {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(state.authUrl))
-            context.startActivity(intent)
-            vm.clearAuthUrl()  // prevent re-open on recompose
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -68,7 +57,7 @@ fun SetupScreen(
                 when (step) {
                     SetupStep.MAL -> MalStep(
                         state = state,
-                        onLogin = { vm.generateAuthUrl() },
+                        onLogin = { vm.openMalLogin(context) },
                         onNext = { vm.goToStep(SetupStep.SONARR) },
                     )
                     SetupStep.SONARR -> SonarrStep(
@@ -268,10 +257,10 @@ private fun MalStep(
         } else if (!state.malCallbackLoading) {
             Button(
                 onClick = onLogin,
-                enabled = !state.isGeneratingAuthUrl,
+                enabled = !state.malLoginLoading,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                if (state.isGeneratingAuthUrl) {
+                if (state.malLoginLoading) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
                 }

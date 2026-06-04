@@ -1,9 +1,12 @@
 package com.chrisalvis.watashiwomite.ui
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chrisalvis.watashiwomite.data.AppPreferences
+import com.chrisalvis.watashiwomite.data.MalRepository
 import com.chrisalvis.watashiwomite.data.SonarrRepository
 import com.chrisalvis.watashiwomite.data.TvdbRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +21,7 @@ data class SetupUiState(
     val step: SetupStep = SetupStep.MAL,
     val malIsLoggedIn: Boolean = false,
     val malUsername: String = "",
+    val malLoginLoading: Boolean = false,
     val malCallbackLoading: Boolean = false,
     val malCallbackError: String? = null,
     val sonarrUrl: String = "",
@@ -29,8 +33,6 @@ data class SetupUiState(
     val tvdbValidating: Boolean = false,
     val tvdbValidateResult: String? = null,
     val tvdbValidateSuccess: Boolean? = null,
-    val authUrl: String = "",
-    val isGeneratingAuthUrl: Boolean = false,
 )
 
 class SetupViewModel(private val context: Context) : ViewModel() {
@@ -59,20 +61,26 @@ class SetupViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun clearAuthUrl() {
-        _uiState.value = _uiState.value.copy(authUrl = "")
-    }
-
     fun clearMalError() {
         _uiState.value = _uiState.value.copy(malCallbackError = null)
     }
 
-    fun generateAuthUrl() {
+    /** Opens the MAL OAuth browser directly from the VM — same as rotato's MalViewModel.login(). */
+    fun openMalLogin(context: Context) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isGeneratingAuthUrl = true)
-            val repo = com.chrisalvis.watashiwomite.data.MalRepository(context)
-            val url = runCatching { repo.buildAuthUrl() }.getOrElse { "" }
-            _uiState.value = _uiState.value.copy(authUrl = url, isGeneratingAuthUrl = false)
+            _uiState.value = _uiState.value.copy(malLoginLoading = true, malCallbackError = null)
+            runCatching {
+                val repo = MalRepository(context)
+                val url = repo.buildAuthUrl()
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(malCallbackError = err.message)
+            }
+            _uiState.value = _uiState.value.copy(malLoginLoading = false)
         }
     }
 
@@ -85,9 +93,8 @@ class SetupViewModel(private val context: Context) : ViewModel() {
             _uiState.value = _uiState.value.copy(
                 malCallbackLoading = true,
                 malCallbackError = null,
-                authUrl = "", // prevent browser re-open on recompose
             )
-            val repo = com.chrisalvis.watashiwomite.data.MalRepository(context)
+            val repo = MalRepository(context)
             val result = repo.exchangeCode(code)
             if (result.isSuccess) {
                 val username = prefs.malUsername.first()
