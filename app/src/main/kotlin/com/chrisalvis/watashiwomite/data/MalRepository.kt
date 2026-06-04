@@ -28,7 +28,7 @@ class MalRepository(private val context: Context) {
     private val http = OkHttpClient()
 
     companion object {
-        const val REDIRECT_URI = "rotato://callback"
+        const val REDIRECT_URI = "watashiwomite://callback"
     }
 
     private fun generateCodeVerifier(): String {
@@ -81,15 +81,7 @@ class MalRepository(private val context: Context) {
             http.newCall(req).execute().use { resp ->
                 val body = resp.body?.string() ?: ""
                 if (!resp.isSuccessful) {
-                    val hint = when {
-                        resp.code == 401 || body.contains("invalid_client") ->
-                            "MAL rejected the request (invalid_client).\n\n" +
-                            "Make sure \"$REDIRECT_URI\" is registered in your MAL app at myanimelist.net/apiconfig."
-                        body.contains("invalid_grant") ->
-                            "Authorization code expired or already used — tap Login again."
-                        else -> "Token exchange failed (${resp.code}): $body"
-                    }
-                    error(hint)
+                    error("MAL token exchange failed (HTTP ${resp.code})\nclient_id=${BuildConfig.MAL_CLIENT_ID}\nredirect_uri=$REDIRECT_URI\n\nResponse:\n$body")
                 }
                 val json = JSONObject(body)
                 val accessToken = json.getString("access_token")
