@@ -60,6 +60,9 @@ class AppPreferences(private val context: Context) {
         // Sync history — JSON array of SyncHistoryEntry (capped at 20)
         val SYNC_HISTORY_JSON = stringPreferencesKey("sync_history_json")
 
+        // Manual TVDB overrides — JSON: {"malId_<id>": {"tvdbId": 123, "tvdbTitle": "Name"}}
+        val MANUAL_TVDB_OVERRIDES = stringPreferencesKey("manual_tvdb_overrides")
+
         val DEFAULT_STATUSES = setOf("watching", "plan_to_watch")
     }
 
@@ -256,6 +259,47 @@ class AppPreferences(private val context: Context) {
 
     val syncHistoryJson: Flow<String> = context.dataStore.data
         .catch { emit(emptyPreferences()) }.map { it[SYNC_HISTORY_JSON] ?: "[]" }
+
+    // ── Manual TVDB overrides ──────────────────────────────────────────────────
+
+    /** Returns map of malId → (tvdbId, tvdbTitle) for user-specified overrides. */
+    val manualTvdbOverrides: Flow<Map<Int, Pair<Int, String>>> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }
+        .map { prefs ->
+            val json = prefs[MANUAL_TVDB_OVERRIDES] ?: return@map emptyMap()
+            runCatching {
+                val obj = org.json.JSONObject(json)
+                buildMap {
+                    for (key in obj.keys()) {
+                        val malId = key.removePrefix("malId_").toIntOrNull() ?: continue
+                        val entry = obj.getJSONObject(key)
+                        put(malId, entry.getInt("tvdbId") to entry.getString("tvdbTitle"))
+                    }
+                }
+            }.getOrDefault(emptyMap())
+        }
+
+    suspend fun getManualTvdbOverrides(): Map<Int, Pair<Int, String>> = manualTvdbOverrides.first()
+
+    suspend fun setManualTvdbOverride(malId: Int, tvdbId: Int, tvdbTitle: String) {
+        context.dataStore.edit { prefs ->
+            val json = prefs[MANUAL_TVDB_OVERRIDES] ?: "{}"
+            val obj = runCatching { org.json.JSONObject(json) }.getOrDefault(org.json.JSONObject())
+            obj.put("malId_$malId", org.json.JSONObject().put("tvdbId", tvdbId).put("tvdbTitle", tvdbTitle))
+            prefs[MANUAL_TVDB_OVERRIDES] = obj.toString()
+        }
+    }
+
+    suspend fun clearManualTvdbOverride(malId: Int) {
+        context.dataStore.edit { prefs ->
+            val json = prefs[MANUAL_TVDB_OVERRIDES] ?: return@edit
+            val obj = runCatching { org.json.JSONObject(json) }.getOrDefault(org.json.JSONObject())
+            obj.remove("malId_$malId")
+            prefs[MANUAL_TVDB_OVERRIDES] = obj.toString()
+        }
+    }
+
+    // ── Sync history ───────────────────────────────────────────────────────────
 
     suspend fun appendSyncHistory(entryJson: String) {
         context.dataStore.edit { prefs ->

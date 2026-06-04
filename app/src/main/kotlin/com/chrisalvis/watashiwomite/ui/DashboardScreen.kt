@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -23,9 +24,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.chrisalvis.watashiwomite.data.SonarrSeries
 import com.chrisalvis.watashiwomite.data.SyncEntry
 import com.chrisalvis.watashiwomite.data.SyncHistoryEntry
 import com.chrisalvis.watashiwomite.data.SyncStatus
+import com.chrisalvis.watashiwomite.data.TvdbSeriesResult
 import com.chrisalvis.watashiwomite.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -34,6 +37,21 @@ import java.util.*
 fun DashboardScreen(vm: DashboardViewModel) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val isDark = isSystemInDarkTheme()
+
+    // Manual match dialog
+    state.matchTarget?.let { target ->
+        ManualMatchDialog(
+            entry = target,
+            isSearching = state.isSearching,
+            results = state.searchResults,
+            searchError = state.searchError,
+            hasOverride = state.manualOverrides.containsKey(target.malId),
+            onSearch = vm::searchManualTvdb,
+            onSelect = { vm.saveManualOverride(target.malId, it) },
+            onClearOverride = { vm.clearManualOverride(target.malId) },
+            onDismiss = vm::dismissMatchDialog,
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -107,7 +125,14 @@ fun DashboardScreen(vm: DashboardViewModel) {
                 }
                 val displayEntries = vm.filteredEntries
                 items(displayEntries, key = { it.malId }) { entry ->
-                    AnimeCard(entry = entry, isDark = isDark)
+                    AnimeCard(
+                        entry = entry,
+                        isDark = isDark,
+                        sonarrStats = state.sonarrStats[entry.tvdbId],
+                        hasManualOverride = state.manualOverrides.containsKey(entry.malId),
+                        onFixMatch = if (entry.syncStatus == SyncStatus.NOT_FOUND || entry.syncStatus == SyncStatus.ERROR)
+                            { { vm.openMatchDialog(entry) } } else null,
+                    )
                 }
             }
         }
@@ -236,7 +261,13 @@ private fun SyncHistorySection(
 }
 
 @Composable
-fun AnimeCard(entry: SyncEntry, isDark: Boolean) {
+fun AnimeCard(
+    entry: SyncEntry,
+    isDark: Boolean,
+    sonarrStats: SonarrSeries? = null,
+    hasManualOverride: Boolean = false,
+    onFixMatch: (() -> Unit)? = null,
+) {
     val statusColor = when (entry.syncStatus) {
         SyncStatus.SYNCED -> if (isDark) StatusSyncedDark else StatusSynced
         SyncStatus.NOT_FOUND -> if (isDark) StatusNotFoundDark else StatusNotFound
@@ -318,6 +349,35 @@ fun AnimeCard(entry: SyncEntry, isDark: Boolean) {
                         )
                     }
                 }
+                // Sonarr download status badge (bottom-end) — only for synced entries with stats
+                if (entry.syncStatus == SyncStatus.SYNCED && sonarrStats != null) {
+                    val pct = sonarrStats.percentOfEpisodes.toInt()
+                    val badgeColor = when {
+                        !sonarrStats.monitored -> Color(0xFF616161)
+                        pct >= 100 -> Color(0xFF2E7D32)
+                        pct > 0 -> Color(0xFF1565C0)
+                        else -> Color(0xFF7B5800)
+                    }
+                    val badgeText = when {
+                        !sonarrStats.monitored -> "Unmonitored"
+                        pct >= 100 -> "✓ 100%"
+                        pct > 0 -> "↓ $pct%"
+                        else -> "○ 0%"
+                    }
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = badgeColor.copy(alpha = 0.88f),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
+                    ) {
+                        Text(
+                            badgeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        )
+                    }
+                }
             }
             Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
@@ -344,7 +404,177 @@ fun AnimeCard(entry: SyncEntry, isDark: Boolean) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                if (hasManualOverride) {
+                    Text(
+                        "📌 Manual match",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+                if (onFixMatch != null) {
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedButton(
+                        onClick = onFixMatch,
+                        modifier = Modifier.fillMaxWidth().height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) {
+                        Icon(Icons.Default.Search, null, modifier = Modifier.size(12.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Fix Match", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun ManualMatchDialog(
+    entry: SyncEntry,
+    isSearching: Boolean,
+    results: List<TvdbSeriesResult>,
+    searchError: String?,
+    hasOverride: Boolean,
+    onSearch: (String) -> Unit,
+    onSelect: (TvdbSeriesResult) -> Unit,
+    onClearOverride: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf(entry.malTitle) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Search, null) },
+        title = { Text("Fix TVDB Match") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "Searching for: ${entry.malTitle}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                if (hasOverride) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "📌 Manual override active",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                            TextButton(onClick = onClearOverride) {
+                                Text("Clear", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Search TVDB") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    trailingIcon = {
+                        if (isSearching) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            IconButton(onClick = { onSearch(query) }) {
+                                Icon(Icons.Default.Search, "Search")
+                            }
+                        }
+                    }
+                )
+
+                if (searchError != null) {
+                    Text(searchError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+
+                if (results.isNotEmpty()) {
+                    Text(
+                        "Select the correct series:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    results.forEach { result ->
+                        Surface(
+                            onClick = { onSelect(result) },
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (result.imageUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = result.imageUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.small),
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier.size(40.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(Icons.Default.Tv, null, modifier = Modifier.size(24.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        result.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (result.year.isNotBlank()) {
+                                        Text(
+                                            result.year,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    if (result.overview.isNotBlank()) {
+                                        Text(
+                                            result.overview,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                                Icon(Icons.Default.ChevronRight, null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                } else if (!isSearching && searchError == null) {
+                    Text(
+                        "Tap the search icon to find the series on TVDB.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

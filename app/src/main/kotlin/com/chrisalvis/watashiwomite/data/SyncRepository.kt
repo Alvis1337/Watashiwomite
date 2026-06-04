@@ -207,6 +207,7 @@ class SyncRepository(private val context: Context) {
 
         onProgress("Fetching your MAL list…")
         val malEntries = malRepo.fetchAnimeList(syncStatuses).getOrThrow()
+        val manualOverrides = prefs.getManualTvdbOverrides()
 
         val entries = mutableListOf<SyncEntry>()
         var syncedCount = 0
@@ -229,7 +230,17 @@ class SyncRepository(private val context: Context) {
                 continue
             }
 
-            val tvdbResult = runCatching { tvdbRepo.searchSeries(tvdbApiKey, anime.title).getOrNull() }
+            val tvdbResult = runCatching {
+                val override = manualOverrides[anime.malId]
+                if (override != null) {
+                    TvdbSeriesResult(
+                        tvdbId = override.first, name = override.second,
+                        overview = "", year = "", imageUrl = "", genres = emptyList(),
+                    )
+                } else {
+                    tvdbRepo.searchSeries(tvdbApiKey, anime.title).getOrNull()
+                }
+            }
 
             if (tvdbResult.isFailure) {
                 entries.add(SyncEntry(
@@ -359,6 +370,7 @@ class SyncRepository(private val context: Context) {
 
         onProgress("Fetching MAL list…")
         val malEntries = malRepo.fetchAnimeList(syncStatuses).getOrThrow()
+        val manualOverrides = prefs.getManualTvdbOverrides()
 
         val toAdd = mutableListOf<Pair<MalAnimeEntry, TvdbSeriesResult>>()
         val alreadySynced = mutableListOf<Pair<MalAnimeEntry, SonarrSeries>>()
@@ -374,7 +386,17 @@ class SyncRepository(private val context: Context) {
                 continue
             }
 
-            val tvdbResult = runCatching { tvdbRepo.searchSeries(tvdbApiKey, anime.title).getOrNull() }
+            val tvdbResult = runCatching {
+                val override = manualOverrides[anime.malId]
+                if (override != null) {
+                    TvdbSeriesResult(
+                        tvdbId = override.first, name = override.second,
+                        overview = "", year = "", imageUrl = "", genres = emptyList(),
+                    )
+                } else {
+                    tvdbRepo.searchSeries(tvdbApiKey, anime.title).getOrNull()
+                }
+            }
             if (tvdbResult.isFailure) {
                 errors.add(anime to (tvdbResult.exceptionOrNull()?.message ?: "TVDB lookup failed"))
                 continue

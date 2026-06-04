@@ -16,6 +16,13 @@ data class SonarrSeries(
     val tvdbId: Int,
     val title: String,
     val alternateTitles: List<String> = emptyList(),
+    // Live stats from Sonarr (not persisted in SyncEntry cache)
+    val episodeFileCount: Int = 0,
+    val episodeCount: Int = 0,
+    val totalEpisodeCount: Int = 0,
+    val percentOfEpisodes: Double = 0.0,
+    val monitored: Boolean = true,
+    val sonarrStatus: String = "", // "continuing", "ended", "upcoming", "deleted"
 )
 
 data class SonarrRootFolder(
@@ -72,11 +79,18 @@ class SonarrRepository {
                     obj.optJSONArray("alternateTitles")?.let { a ->
                         for (j in 0 until a.length()) a.optJSONObject(j)?.optString("title")?.let(altTitles::add)
                     }
+                    val stats = obj.optJSONObject("statistics")
                     SonarrSeries(
                         id = obj.getInt("id"),
                         tvdbId = obj.optInt("tvdbId", -1),
                         title = obj.getString("title"),
                         alternateTitles = altTitles,
+                        episodeFileCount = stats?.optInt("episodeFileCount", 0) ?: 0,
+                        episodeCount = stats?.optInt("episodeCount", 0) ?: 0,
+                        totalEpisodeCount = stats?.optInt("totalEpisodeCount", 0) ?: 0,
+                        percentOfEpisodes = stats?.optDouble("percentOfEpisodes", 0.0) ?: 0.0,
+                        monitored = obj.optBoolean("monitored", true),
+                        sonarrStatus = obj.optString("status", ""),
                     )
                 }
             }

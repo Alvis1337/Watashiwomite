@@ -173,4 +173,44 @@ class TvdbRepository {
             Unit
         }
     }
+
+    /**
+     * Search TVDB and return ALL matching results (up to 10) for manual series matching UI.
+     * Unlike [searchSeries], this does not auto-score or pick the best — it returns everything.
+     */
+    suspend fun searchSeriesAll(apiKey: String, query: String): Result<List<TvdbSeriesResult>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val token = getToken(apiKey)
+                val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+                val req = Request.Builder()
+                    .url("https://api4.thetvdb.com/v4/search?query=$encodedQuery&type=series&limit=10")
+                    .header("Authorization", "Bearer $token")
+                    .build()
+                http.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use emptyList()
+                    val json = JSONObject(resp.body?.string() ?: return@use emptyList())
+                    val data = json.optJSONArray("data") ?: return@use emptyList()
+                    buildList {
+                        for (i in 0 until data.length()) {
+                            val item = data.getJSONObject(i)
+                            val tvdbId = item.optInt("tvdb_id", -1)
+                            if (tvdbId == -1) continue
+                            val genres = mutableListOf<String>()
+                            item.optJSONArray("genres")?.let { arr ->
+                                for (j in 0 until arr.length()) genres.add(arr.getString(j))
+                            }
+                            add(TvdbSeriesResult(
+                                tvdbId = tvdbId,
+                                name = item.optString("name", ""),
+                                overview = item.optString("overview", ""),
+                                year = item.optString("year", ""),
+                                imageUrl = item.optString("image_url", ""),
+                                genres = genres,
+                            ))
+                        }
+                    }
+                }
+            }
+        }
 }
