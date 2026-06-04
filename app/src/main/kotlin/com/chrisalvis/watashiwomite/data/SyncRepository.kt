@@ -90,6 +90,15 @@ private fun monitoringForScore(score: Int, highThreshold: Int, medThreshold: Int
     else -> "none"
 }
 
+/** Lightweight preview of what a sync would do — no writes to Sonarr. */
+data class SyncPreview(
+    val toAdd: List<Pair<MalAnimeEntry, TvdbSeriesResult>>,     // would be newly added
+    val alreadySynced: List<Pair<MalAnimeEntry, SonarrSeries>>, // already in Sonarr
+    val notFound: List<MalAnimeEntry>,                          // TVDB lookup returned nothing
+    val skipped: List<MalAnimeEntry>,                           // filtered by type
+    val errors: List<Pair<MalAnimeEntry, String>>,              // lookup error
+)
+
 class SyncRepository(private val context: Context) {
 
     private val prefs = AppPreferences(context)
@@ -321,6 +330,76 @@ class SyncRepository(private val context: Context) {
             errorCount = errorCount,
             notFoundCount = notFoundCount,
             skippedCount = skippedCount,
+        )
+    }
+
+    /**
+     * Dry-run: compute what a sync would do without writing anything to Sonarr.
+     * Returns [SyncPreview] showing would-add / already-synced / not-found / skipped.
+     */
+    suspend fun computeSyncPreview(onProgress: suspend (String) -> Unit = {}): Result<SyncPreview> = runCatching {
+        onProgress("Fetching configuration…")
+
+        val sonarrUrl = prefs.sonarrUrl.first()
+        val sonarrApiKey = prefs.sonarrApiKey.first()
+        val tvdbApiKey = prefs.tvdbApiKey.first()
+        val syncStatuses = prefs.syncStatuses.first()
+        val skipOVAs = prefs.skipOVAs.first()
+        val skipSpecials = prefs.skipSpecials.first()
+        val skipMovies = prefs.skipMovies.first()
+        val onlyMain = prefs.onlyMainSeries.first()
+
+        check(sonarrUrl.isNotBlank()) { "Sonarr URL is not configured" }
+        check(sonarrApiKey.isNotBlank()) { "Sonarr API key is not configured" }
+        check(tvdbApiKey.isNotBlank()) { "TVDB API key is not configured" }
+
+        onProgress("Fetching Sonarr library…")
+        val sonarrSeries = sonarrRepo.getSeries(sonarrUrl, sonarrApiKey).getOrThrow()
+        val sonarrByTvdbId = sonarrSeries.associateBy { it.tvdbId }
+
+        onProgress("Fetching MAL list…")
+        val malEntries = malRepo.fetchAnimeList(syncStatuses).getOrThrow()
+
+        val toAdd = mutableListOf<Pair<MalAnimeEntry, TvdbSeriesResult>>()
+        val alreadySynced = mutableListOf<Pair<MalAnimeEntry, SonarrSeries>>()
+        val notFound = mutableListOf<MalAnimeEntry>()
+        val skipped = mutableListOf<MalAnimeEntry>()
+        val errors = mutableListOf<Pair<MalAnimeEntry, String>>()
+
+        for ((index, anime) in malEntries.withIndex()) {
+            onProgress("Checking ${index + 1}/${malEntries.size}: ${anime.title}")
+
+            if (shouldSkip(anime.mediaType, skipOVAs, skipSpecials, skipMovies, onlyMain)) {
+                skipped.add(anime)
+                continue
+            }
+
+            val tvdbResult = runCatching { tvdbRepo.searchSeries(tvdbApiKey, anime.title).getOrNull() }
+            if (tvdbResult.isFailure) {
+                errors.add(anime to (tvdbResult.exceptionOrNull()?.message ?: "TVDB lookup failed"))
+                continue
+            }
+
+            val tvdb = tvdbResult.getOrNull()
+            if (tvdb == null) {
+                notFound.add(anime)
+                continue
+            }
+
+            val existingSonarr = findInSonarr(tvdb.tvdbId, tvdb.name, sonarrByTvdbId, sonarrSeries)
+            if (existingSonarr != null) {
+                alreadySynced.add(anime to existingSonarr)
+            } else {
+                toAdd.add(anime to tvdb)
+            }
+        }
+
+        SyncPreview(
+            toAdd = toAdd,
+            alreadySynced = alreadySynced,
+            notFound = notFound,
+            skipped = skipped,
+            errors = errors,
         )
     }
 

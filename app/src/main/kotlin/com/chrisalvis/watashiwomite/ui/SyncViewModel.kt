@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.chrisalvis.watashiwomite.data.AppPreferences
 import com.chrisalvis.watashiwomite.data.SonarrRepository
 import com.chrisalvis.watashiwomite.data.SonarrSeries
+import com.chrisalvis.watashiwomite.data.SyncPreview
 import com.chrisalvis.watashiwomite.data.SyncRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,11 @@ data class SyncUiState(
     // Batch action state
     val isRunningCommand: Boolean = false,
     val commandResult: String? = null,
+    // Preview mode state
+    val isPreviewing: Boolean = false,
+    val previewProgress: String = "",
+    val syncPreview: SyncPreview? = null,
+    val showPreviewDialog: Boolean = false,
 )
 
 val MAL_STATUSES = listOf(
@@ -190,5 +196,36 @@ class SyncViewModel(private val context: Context) : ViewModel() {
                                 else result.exceptionOrNull()?.message ?: "Command failed",
             )
         }
+    }
+
+    fun previewSync() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isPreviewing = true,
+                previewProgress = "Starting preview…",
+                syncPreview = null,
+                showPreviewDialog = false,
+            )
+            val result = syncRepo.computeSyncPreview { progress ->
+                _uiState.value = _uiState.value.copy(previewProgress = progress)
+            }
+            _uiState.value = _uiState.value.copy(
+                isPreviewing = false,
+                previewProgress = "",
+                syncPreview = result.getOrNull(),
+                showPreviewDialog = result.isSuccess,
+                lastResult = if (result.isFailure) result.exceptionOrNull()?.message ?: "Preview failed" else _uiState.value.lastResult,
+                lastResultSuccess = if (result.isFailure) false else _uiState.value.lastResultSuccess,
+            )
+        }
+    }
+
+    fun dismissPreview() {
+        _uiState.value = _uiState.value.copy(showPreviewDialog = false)
+    }
+
+    fun confirmPreviewAndSync(onComplete: () -> Unit = {}) {
+        _uiState.value = _uiState.value.copy(showPreviewDialog = false)
+        runSync(onComplete)
     }
 }
