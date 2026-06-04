@@ -43,3 +43,19 @@ certificates
 *.old.*
 *.backup.*
 backups/
+
+# Android / Gradle
+local.properties
+keystore.properties
+*.jks
+*.keystore
+.gradle/
+app/build/
+build/
+*.apk
+*.aab
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
