@@ -15,6 +15,7 @@ data class SonarrSeries(
     val id: Int,
     val tvdbId: Int,
     val title: String,
+    val alternateTitles: List<String> = emptyList(),
 )
 
 data class SonarrRootFolder(
@@ -67,10 +68,15 @@ class SonarrRepository {
                 val arr = JSONArray(resp.body?.string() ?: throw IOException("Empty response"))
                 List(arr.length()) {
                     val obj = arr.getJSONObject(it)
+                    val altTitles = mutableListOf<String>()
+                    obj.optJSONArray("alternateTitles")?.let { a ->
+                        for (j in 0 until a.length()) a.optJSONObject(j)?.optString("title")?.let(altTitles::add)
+                    }
                     SonarrSeries(
                         id = obj.getInt("id"),
                         tvdbId = obj.optInt("tvdbId", -1),
                         title = obj.getString("title"),
+                        alternateTitles = altTitles,
                     )
                 }
             }
@@ -125,6 +131,7 @@ class SonarrRepository {
         title: String,
         rootFolderPath: String,
         qualityProfileId: Int,
+        monitored: Boolean = true,
     ): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject().apply {
@@ -132,7 +139,7 @@ class SonarrRepository {
                 put("title", title)
                 put("qualityProfileId", qualityProfileId)
                 put("rootFolderPath", rootFolderPath)
-                put("monitored", true)
+                put("monitored", monitored)
                 put("seasonFolder", true)
                 put("addOptions", JSONObject().apply {
                     put("searchForMissingEpisodes", false)
@@ -167,6 +174,21 @@ class SonarrRepository {
                 .build()
             http.newCall(req).execute().use { resp ->
                 check(resp.isSuccessful) { "Failed to remove series: ${resp.code}" }
+            }
+        }
+    }
+
+    /** Send a Sonarr command (e.g. "MissingEpisodeSearch", "RefreshSeries"). */
+    suspend fun sendCommand(url: String, apiKey: String, name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject().put("name", name).toString()
+                .toRequestBody("application/json".toMediaType())
+            val req = baseHeaders(url, apiKey)
+                .url("$url/api/v3/command")
+                .post(body)
+                .build()
+            http.newCall(req).execute().use { resp ->
+                check(resp.isSuccessful) { "Command '$name' failed: ${resp.code}" }
             }
         }
     }

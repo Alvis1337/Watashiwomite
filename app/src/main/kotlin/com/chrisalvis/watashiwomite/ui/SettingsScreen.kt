@@ -261,6 +261,66 @@ fun SettingsScreen(vm: SettingsViewModel, onSetupAgain: () -> Unit) {
                 }
             }
 
+            // ── Sync Preferences Section ──────────────────────────────────────
+            SettingsSection(title = "Sync Preferences") {
+                Text("Episode Type Filters", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                @Composable
+                fun SwitchRow(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                        Switch(checked = checked, onCheckedChange = onChecked)
+                    }
+                }
+
+                SwitchRow("Skip OVAs", state.skipOVAs, vm::setSkipOVAs)
+                SwitchRow("Skip Specials", state.skipSpecials, vm::setSkipSpecials)
+                SwitchRow("Skip Movies", state.skipMovies, vm::setSkipMovies)
+                SwitchRow("Only main TV series", state.onlyMainSeries, vm::setOnlyMainSeries)
+
+                HorizontalDivider()
+
+                Text("Score-Based Monitoring", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SwitchRow("Enable score-based monitoring", state.scoreBasedMonitoring, vm::setScoreBasedMonitoring)
+
+                if (state.scoreBasedMonitoring) {
+                    Text(
+                        "Score ≥ High → monitor all\n" +
+                        "Score ≥ Med  → monitor future only\n" +
+                        "Score < Med  → monitor none",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = state.scoreHighThreshold,
+                            onValueChange = vm::setScoreHighThreshold,
+                            label = { Text("High (≥)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = state.scoreMedThreshold,
+                            onValueChange = vm::setScoreMedThreshold,
+                            label = { Text("Med (≥)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
         }
     }

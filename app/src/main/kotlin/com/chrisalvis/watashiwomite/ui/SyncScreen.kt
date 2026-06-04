@@ -6,8 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -17,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+    var showRemovalSection by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -36,7 +36,7 @@ fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            // List selection card
+            // ── List selection ────────────────────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -48,7 +48,7 @@ fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "Select which lists to sync to Sonarr. At least one list must be selected.",
+                        "Select which lists to sync to Sonarr.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -70,22 +70,14 @@ fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
                 }
             }
 
-            // Sync button
+            // ── Sync button ───────────────────────────────────────────────────
             Button(
-                onClick = {
-                    vm.runSync {
-                        onSyncComplete()
-                    }
-                },
+                onClick = { vm.runSync { onSyncComplete() } },
                 enabled = !state.isSyncing && state.selectedStatuses.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             ) {
                 if (state.isSyncing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                     Spacer(Modifier.width(12.dp))
                     Text("Syncing…")
                 } else {
@@ -95,7 +87,7 @@ fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
                 }
             }
 
-            // Progress message
+            // ── Progress ──────────────────────────────────────────────────────
             if (state.isSyncing && state.syncProgress.isNotBlank()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -107,58 +99,165 @@ fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text(
-                            state.syncProgress,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
+                        Text(state.syncProgress, style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
             }
 
-            // Last result
+            // ── Last result ───────────────────────────────────────────────────
             state.lastResult?.let { msg ->
                 val success = state.lastResultSuccess == true
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (success) MaterialTheme.colorScheme.primaryContainer
-                                        else MaterialTheme.colorScheme.errorContainer
-                    ),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Icon(
-                            if (success) Icons.Default.CheckCircle else Icons.Default.Error,
-                            null,
-                            tint = if (success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        )
-                        Text(
-                            msg,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (success) MaterialTheme.colorScheme.onPrimaryContainer
-                                    else MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                    }
-                }
+                ResultCard(msg, success)
             }
 
-            // Mini stats after sync
+            // ── Stats after sync ──────────────────────────────────────────────
             if (state.totalCount > 0) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = CardDefaults.outlinedCardBorder(),
                 ) {
-                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Last Sync Results", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         SyncStatRow("Total anime", state.totalCount)
-                        SyncStatRow("Added to Sonarr", state.syncedCount)
+                        SyncStatRow("Synced to Sonarr", state.syncedCount)
+                        SyncStatRow("Newly added", state.newlyAddedCount)
                         SyncStatRow("Not found on TVDB", state.notFoundCount)
                         SyncStatRow("Errors", state.errorCount)
+                        if (state.skippedCount > 0) SyncStatRow("Skipped (filtered)", state.skippedCount)
+                    }
+                }
+
+                // ── Post-sync batch actions ───────────────────────────────────
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = CardDefaults.outlinedCardBorder(),
+                ) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Sonarr Actions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedButton(
+                                onClick = vm::searchMissing,
+                                enabled = !state.isRunningCommand,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(Icons.Default.Search, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Search Missing", style = MaterialTheme.typography.labelMedium)
+                            }
+                            OutlinedButton(
+                                onClick = vm::refreshMetadata,
+                                enabled = !state.isRunningCommand,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Refresh Metadata", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                        if (state.isRunningCommand) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                        state.commandResult?.let { ResultCard(it, !it.contains("failed", ignoreCase = true)) }
+                    }
+                }
+            }
+
+            // ── Remove from Sonarr section ────────────────────────────────────
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder(),
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Remove from Sonarr", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        IconButton(onClick = { showRemovalSection = !showRemovalSection }) {
+                            Icon(if (showRemovalSection) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
+                        }
+                    }
+
+                    if (showRemovalSection) {
+                        Text(
+                            "Find Sonarr series that are NOT in your current MAL sync data. " +
+                            "Only runs after a sync has been performed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        OutlinedButton(
+                            onClick = vm::previewRemoval,
+                            enabled = !state.isLoadingRemovalDiff && !state.isSyncing,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            if (state.isLoadingRemovalDiff) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                            } else {
+                                Icon(Icons.Default.Preview, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text("Preview Candidates")
+                        }
+
+                        if (state.removalDiff.isNotEmpty()) {
+                            Text(
+                                "${state.removalDiff.size} series found not in your MAL sync data:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = vm::selectAllForRemoval) { Text("Select All") }
+                                TextButton(onClick = vm::clearRemovalSelection) { Text("Clear") }
+                            }
+                            state.removalDiff.forEach { series ->
+                                val checked = series.id in state.selectedForRemoval
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(series.title, style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f))
+                                    Checkbox(checked = checked, onCheckedChange = { vm.toggleRemovalSelection(series.id) })
+                                }
+                            }
+
+                            HorizontalDivider()
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("Delete files from disk", style = MaterialTheme.typography.bodySmall)
+                                Switch(checked = state.deleteFiles, onCheckedChange = vm::setDeleteFiles)
+                            }
+
+                            Button(
+                                onClick = vm::executeRemoval,
+                                enabled = state.selectedForRemoval.isNotEmpty() && !state.isRemoving,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                if (state.isRemoving) {
+                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onError)
+                                    Spacer(Modifier.width(8.dp))
+                                } else {
+                                    Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text("Remove ${state.selectedForRemoval.size} Selected", color = MaterialTheme.colorScheme.onError)
+                            }
+                        }
+
+                        state.removalResult?.let { ResultCard(it, !it.lowercase().contains("fail")) }
                     }
                 }
             }
@@ -167,11 +266,34 @@ fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
 }
 
 @Composable
-private fun SyncStatRow(label: String, value: Int) {
-    Row(
+private fun ResultCard(message: String, success: Boolean) {
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        colors = CardDefaults.cardColors(
+            containerColor = if (success) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.errorContainer
+        ),
     ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                if (success) Icons.Default.CheckCircle else Icons.Default.Error, null,
+                tint = if (success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+            )
+            Text(
+                message, style = MaterialTheme.typography.bodyMedium,
+                color = if (success) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SyncStatRow(label: String, value: Int) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
     }

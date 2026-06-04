@@ -19,6 +19,9 @@ data class MalAnimeEntry(
     val title: String,
     val status: String,
     val imageUrl: String,
+    val mediaType: String = "tv",   // "tv","ova","movie","special","ona","music","unknown"
+    val score: Int = 0,             // user's MAL score 0-10 (0 = unrated)
+    val numEpisodes: Int = 0,
 )
 
 class MalRepository(private val context: Context) {
@@ -155,7 +158,7 @@ class MalRepository(private val context: Context) {
         val entries = mutableListOf<MalAnimeEntry>()
         for (status in statuses) {
             var url: String? = "https://api.myanimelist.net/v2/users/@me/animelist" +
-                "?status=$status&fields=list_status,main_picture&limit=500"
+                "?status=$status&fields=list_status,main_picture,num_episodes,media_type&limit=500"
             while (url != null) {
                 val req = Request.Builder()
                     .url(url)
@@ -173,9 +176,12 @@ class MalRepository(private val context: Context) {
                         val title = node.getString("title")
                         val imageUrl = node.optJSONObject("main_picture")
                             ?.optString("medium") ?: ""
-                        val listStatus = item.optJSONObject("list_status")
-                            ?.optString("status") ?: status
-                        entries.add(MalAnimeEntry(malId, title, listStatus, imageUrl))
+                        val mediaType = node.optString("media_type", "tv")
+                        val numEpisodes = node.optInt("num_episodes", 0)
+                        val listStatusObj = item.optJSONObject("list_status")
+                        val listStatus = listStatusObj?.optString("status") ?: status
+                        val score = listStatusObj?.optInt("score", 0) ?: 0
+                        entries.add(MalAnimeEntry(malId, title, listStatus, imageUrl, mediaType, score, numEpisodes))
                     }
                     url = json.optJSONObject("paging")?.optString("next")?.takeIf { it.isNotBlank() }
                 }

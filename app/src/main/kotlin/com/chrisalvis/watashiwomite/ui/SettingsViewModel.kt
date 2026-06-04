@@ -32,6 +32,14 @@ data class SettingsUiState(
     val tvdbResult: String? = null,
     val tvdbSuccess: Boolean? = null,
     val logoutSuccess: Boolean = false,
+    // Sync preferences
+    val skipOVAs: Boolean = false,
+    val skipSpecials: Boolean = false,
+    val skipMovies: Boolean = false,
+    val onlyMainSeries: Boolean = false,
+    val scoreBasedMonitoring: Boolean = false,
+    val scoreHighThreshold: String = "8",
+    val scoreMedThreshold: String = "6",
 )
 
 class SettingsViewModel(private val context: Context) : ViewModel() {
@@ -54,6 +62,13 @@ class SettingsViewModel(private val context: Context) : ViewModel() {
                 sonarrRootFolder = prefs.sonarrRootFolder.first(),
                 sonarrQualityProfileId = prefs.sonarrQualityProfileId.first(),
                 tvdbApiKey = prefs.tvdbApiKey.first(),
+                skipOVAs = prefs.skipOVAs.first(),
+                skipSpecials = prefs.skipSpecials.first(),
+                skipMovies = prefs.skipMovies.first(),
+                onlyMainSeries = prefs.onlyMainSeries.first(),
+                scoreBasedMonitoring = prefs.scoreBasedMonitoring.first(),
+                scoreHighThreshold = prefs.scoreHighThreshold.first().toString(),
+                scoreMedThreshold = prefs.scoreMedThreshold.first().toString(),
             )
         }
     }
@@ -144,6 +159,26 @@ class SettingsViewModel(private val context: Context) : ViewModel() {
             prefs.clearMalAuth()
             prefs.setSetupDone(false)
             onLoggedOut()
+        }
+    }
+
+    fun setSkipOVAs(v: Boolean) { _uiState.value = _uiState.value.copy(skipOVAs = v); saveSyncPrefs() }
+    fun setSkipSpecials(v: Boolean) { _uiState.value = _uiState.value.copy(skipSpecials = v); saveSyncPrefs() }
+    fun setSkipMovies(v: Boolean) { _uiState.value = _uiState.value.copy(skipMovies = v); saveSyncPrefs() }
+    fun setOnlyMainSeries(v: Boolean) { _uiState.value = _uiState.value.copy(onlyMainSeries = v); saveSyncPrefs() }
+    fun setScoreBasedMonitoring(v: Boolean) { _uiState.value = _uiState.value.copy(scoreBasedMonitoring = v); saveSyncPrefs() }
+    fun setScoreHighThreshold(v: String) { _uiState.value = _uiState.value.copy(scoreHighThreshold = v); saveSyncPrefs() }
+    fun setScoreMedThreshold(v: String) { _uiState.value = _uiState.value.copy(scoreMedThreshold = v); saveSyncPrefs() }
+
+    private fun saveSyncPrefs() {
+        val s = _uiState.value
+        viewModelScope.launch {
+            prefs.setEpisodeFilters(s.skipOVAs, s.skipSpecials, s.skipMovies, s.onlyMainSeries)
+            prefs.setScoreMonitoring(
+                s.scoreBasedMonitoring,
+                s.scoreHighThreshold.toIntOrNull() ?: 8,
+                s.scoreMedThreshold.toIntOrNull() ?: 6,
+            )
         }
     }
 }

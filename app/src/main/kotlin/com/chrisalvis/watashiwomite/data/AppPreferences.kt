@@ -42,9 +42,23 @@ class AppPreferences(private val context: Context) {
         // Sync configuration — JSON array of status strings e.g. ["watching","plan_to_watch"]
         val SYNC_STATUSES = stringPreferencesKey("sync_statuses")
 
+        // Episode-type filter preferences
+        val SKIP_OVAS = booleanPreferencesKey("skip_ovas")
+        val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
+        val SKIP_MOVIES = booleanPreferencesKey("skip_movies")
+        val ONLY_MAIN_SERIES = booleanPreferencesKey("only_main_series")
+
+        // Score-based monitoring (use MAL user score to set Sonarr monitoring level)
+        val SCORE_BASED_MONITORING = booleanPreferencesKey("score_based_monitoring")
+        val SCORE_HIGH_THRESHOLD = stringPreferencesKey("score_high_threshold") // default "8"
+        val SCORE_MED_THRESHOLD = stringPreferencesKey("score_med_threshold")   // default "6"
+
         // Sync result cache — JSON array of SyncEntry objects
         val SYNC_DATA_JSON = stringPreferencesKey("sync_data_json")
         val LAST_SYNC_MS = stringPreferencesKey("last_sync_ms")
+
+        // Sync history — JSON array of SyncHistoryEntry (capped at 20)
+        val SYNC_HISTORY_JSON = stringPreferencesKey("sync_history_json")
 
         val DEFAULT_STATUSES = setOf("watching", "plan_to_watch")
     }
@@ -198,6 +212,61 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[SYNC_DATA_JSON] = json
             prefs[LAST_SYNC_MS] = timestampMs.toString()
+        }
+    }
+
+    // ── Episode-type filter preferences ───────────────────────────────────────
+
+    val skipOVAs: Flow<Boolean> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }.map { it[SKIP_OVAS] ?: false }
+    val skipSpecials: Flow<Boolean> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }.map { it[SKIP_SPECIALS] ?: false }
+    val skipMovies: Flow<Boolean> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }.map { it[SKIP_MOVIES] ?: false }
+    val onlyMainSeries: Flow<Boolean> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }.map { it[ONLY_MAIN_SERIES] ?: false }
+
+    suspend fun setEpisodeFilters(skipOVAs: Boolean, skipSpecials: Boolean, skipMovies: Boolean, onlyMain: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[SKIP_OVAS] = skipOVAs
+            prefs[SKIP_SPECIALS] = skipSpecials
+            prefs[SKIP_MOVIES] = skipMovies
+            prefs[ONLY_MAIN_SERIES] = onlyMain
+        }
+    }
+
+    // ── Score-based monitoring ─────────────────────────────────────────────────
+
+    val scoreBasedMonitoring: Flow<Boolean> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }.map { it[SCORE_BASED_MONITORING] ?: false }
+    val scoreHighThreshold: Flow<Int> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }.map { it[SCORE_HIGH_THRESHOLD]?.toIntOrNull() ?: 8 }
+    val scoreMedThreshold: Flow<Int> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }.map { it[SCORE_MED_THRESHOLD]?.toIntOrNull() ?: 6 }
+
+    suspend fun setScoreMonitoring(enabled: Boolean, highThreshold: Int, medThreshold: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[SCORE_BASED_MONITORING] = enabled
+            prefs[SCORE_HIGH_THRESHOLD] = highThreshold.toString()
+            prefs[SCORE_MED_THRESHOLD] = medThreshold.toString()
+        }
+    }
+
+    // ── Sync history ───────────────────────────────────────────────────────────
+
+    val syncHistoryJson: Flow<String> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }.map { it[SYNC_HISTORY_JSON] ?: "[]" }
+
+    suspend fun appendSyncHistory(entryJson: String) {
+        context.dataStore.edit { prefs ->
+            val existing = prefs[SYNC_HISTORY_JSON] ?: "[]"
+            val arr = runCatching { org.json.JSONArray(existing) }.getOrDefault(org.json.JSONArray())
+            val newEntry = org.json.JSONObject(entryJson)
+            // Prepend newest first, keep max 20
+            val newArr = org.json.JSONArray()
+            newArr.put(newEntry)
+            for (i in 0 until minOf(arr.length(), 19)) newArr.put(arr.getJSONObject(i))
+            prefs[SYNC_HISTORY_JSON] = newArr.toString()
         }
     }
 }

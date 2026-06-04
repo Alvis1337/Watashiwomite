@@ -1,10 +1,14 @@
 package com.chrisalvis.watashiwomite.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.chrisalvis.watashiwomite.data.SyncEntry
+import com.chrisalvis.watashiwomite.data.SyncHistoryEntry
 import com.chrisalvis.watashiwomite.data.SyncStatus
 import com.chrisalvis.watashiwomite.ui.theme.*
 import java.text.SimpleDateFormat
@@ -58,6 +63,7 @@ fun DashboardScreen(vm: DashboardViewModel) {
                 synced = state.syncedCount,
                 needSync = state.needSyncCount,
                 errors = state.errorCount + state.notFoundCount,
+                skipped = state.skippedCount,
                 lastSyncMs = state.lastSyncMs,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
@@ -66,10 +72,15 @@ fun DashboardScreen(vm: DashboardViewModel) {
             StatusFilterRow(
                 selected = state.filterStatus,
                 onSelect = vm::setFilter,
+                hasSkipped = state.skippedCount > 0,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
 
             if (state.entries.isEmpty()) {
+                // Sync history if we have it but no entries
+                if (state.syncHistory.isNotEmpty()) {
+                    SyncHistorySection(history = state.syncHistory, modifier = Modifier.padding(16.dp))
+                }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Icon(Icons.Default.SyncAlt, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -83,11 +94,17 @@ fun DashboardScreen(vm: DashboardViewModel) {
 
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 160.dp),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
+                // Sync history header (as a first full-width item shown at top)
+                if (state.syncHistory.isNotEmpty()) {
+                    item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        SyncHistorySection(history = state.syncHistory.take(5))
+                    }
+                }
                 val displayEntries = vm.filteredEntries
                 items(displayEntries, key = { it.malId }) { entry ->
                     AnimeCard(entry = entry, isDark = isDark)
@@ -103,6 +120,7 @@ private fun HeroStatsRow(
     synced: Int,
     needSync: Int,
     errors: Int,
+    skipped: Int,
     lastSyncMs: Long?,
     modifier: Modifier = Modifier,
 ) {
@@ -122,7 +140,8 @@ private fun HeroStatsRow(
             StatChip("Total", total, MaterialTheme.colorScheme.primary, Modifier.weight(1f))
             StatChip("Synced", synced, Color(0xFF2E7D32), Modifier.weight(1f))
             StatChip("Need Sync", needSync, Color(0xFF1565C0), Modifier.weight(1f))
-            StatChip("Errors", errors, MaterialTheme.colorScheme.error, Modifier.weight(1f))
+            StatChip("Issues", errors, MaterialTheme.colorScheme.error, Modifier.weight(1f))
+            if (skipped > 0) StatChip("Skipped", skipped, Color(0xFF7B5800), Modifier.weight(1f))
         }
     }
 }
@@ -157,16 +176,62 @@ private fun StatChip(label: String, value: Int, color: Color, modifier: Modifier
 private fun StatusFilterRow(
     selected: SyncStatus?,
     onSelect: (SyncStatus?) -> Unit,
+    hasSkipped: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier,
+        modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text("All") })
         FilterChip(selected = selected == SyncStatus.SYNCED, onClick = { onSelect(SyncStatus.SYNCED) }, label = { Text("Synced") })
         FilterChip(selected = selected == SyncStatus.ERROR, onClick = { onSelect(SyncStatus.ERROR) }, label = { Text("Errors") })
         FilterChip(selected = selected == SyncStatus.NOT_FOUND, onClick = { onSelect(SyncStatus.NOT_FOUND) }, label = { Text("Not Found") })
+        if (hasSkipped) {
+            FilterChip(selected = selected == SyncStatus.SKIPPED, onClick = { onSelect(SyncStatus.SKIPPED) }, label = { Text("Skipped") })
+        }
+    }
+}
+
+@Composable
+private fun SyncHistorySection(
+    history: List<SyncHistoryEntry>,
+    modifier: Modifier = Modifier,
+) {
+    val fmt = SimpleDateFormat("MMM d HH:mm", Locale.getDefault())
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Sync History", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            history.forEach { entry ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        fmt.format(Date(entry.timestampMs)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "${entry.syncedCount}/${entry.totalCount} synced" +
+                                if (entry.newlyAddedCount > 0) " (+${entry.newlyAddedCount} new)" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (entry.errorCount > 0 || entry.notFoundCount > 0) {
+                        Text(
+                            "${entry.errorCount + entry.notFoundCount} issues",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -177,6 +242,7 @@ fun AnimeCard(entry: SyncEntry, isDark: Boolean) {
         SyncStatus.NOT_FOUND -> if (isDark) StatusNotFoundDark else StatusNotFound
         SyncStatus.ERROR -> if (isDark) StatusErrorDark else StatusError
         SyncStatus.PENDING -> if (isDark) StatusPendingDark else StatusPending
+        SyncStatus.SKIPPED -> Color(0xFF7B5800)
     }
 
     val statusIcon = when (entry.syncStatus) {
@@ -184,6 +250,7 @@ fun AnimeCard(entry: SyncEntry, isDark: Boolean) {
         SyncStatus.NOT_FOUND -> Icons.Default.SearchOff
         SyncStatus.ERROR -> Icons.Default.Error
         SyncStatus.PENDING -> Icons.Default.Schedule
+        SyncStatus.SKIPPED -> Icons.Default.Block
     }
 
     val statusLabel = when (entry.syncStatus) {
@@ -191,6 +258,7 @@ fun AnimeCard(entry: SyncEntry, isDark: Boolean) {
         SyncStatus.NOT_FOUND -> "Not Found"
         SyncStatus.ERROR -> "Error"
         SyncStatus.PENDING -> "Pending"
+        SyncStatus.SKIPPED -> "Skipped"
     }
 
     Card(
@@ -232,6 +300,22 @@ fun AnimeCard(entry: SyncEntry, isDark: Boolean) {
                         Icon(statusIcon, null, modifier = Modifier.size(10.dp), tint = Color.White)
                         Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = Color.White,
                             fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                // Score badge (bottom-start) — only if user has rated
+                if (entry.score > 0) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = Color.Black.copy(alpha = 0.7f),
+                        modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
+                    ) {
+                        Text(
+                            "★ ${entry.score}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFFFD600),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        )
                     }
                 }
             }

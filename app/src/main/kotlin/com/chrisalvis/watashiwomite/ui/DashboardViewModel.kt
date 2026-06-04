@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chrisalvis.watashiwomite.data.AppPreferences
 import com.chrisalvis.watashiwomite.data.SyncEntry
+import com.chrisalvis.watashiwomite.data.SyncHistoryEntry
 import com.chrisalvis.watashiwomite.data.SyncRepository
 import com.chrisalvis.watashiwomite.data.SyncStatus
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,8 +22,10 @@ data class DashboardUiState(
     val needSyncCount: Int = 0,
     val errorCount: Int = 0,
     val notFoundCount: Int = 0,
+    val skippedCount: Int = 0,
     val lastSyncMs: Long? = null,
-    val filterStatus: SyncStatus? = null, // null = show all
+    val filterStatus: SyncStatus? = null,
+    val syncHistory: List<SyncHistoryEntry> = emptyList(),
 )
 
 class DashboardViewModel(private val context: Context) : ViewModel() {
@@ -44,6 +47,7 @@ class DashboardViewModel(private val context: Context) : ViewModel() {
             val lastSyncStr = prefs.lastSyncMs.first()
             val lastSyncMs = lastSyncStr.toLongOrNull()
             val stats = syncRepo.computeStats(entries)
+            val history = syncRepo.loadSyncHistory()
             _uiState.value = DashboardUiState(
                 isLoading = false,
                 entries = entries,
@@ -52,7 +56,9 @@ class DashboardViewModel(private val context: Context) : ViewModel() {
                 needSyncCount = stats.needSyncCount,
                 errorCount = stats.errorCount,
                 notFoundCount = stats.notFoundCount,
+                skippedCount = stats.skippedCount,
                 lastSyncMs = lastSyncMs,
+                syncHistory = history,
             )
         }
     }

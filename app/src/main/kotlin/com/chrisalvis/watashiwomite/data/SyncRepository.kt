@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
 
-enum class SyncStatus { SYNCED, NOT_FOUND, ERROR, PENDING }
+enum class SyncStatus { SYNCED, NOT_FOUND, ERROR, PENDING, SKIPPED }
 
 data class SyncEntry(
     val malId: Int,
@@ -17,6 +17,39 @@ data class SyncEntry(
     val sonarrId: Int?,
     val syncStatus: SyncStatus,
     val errorMessage: String?,
+    val mediaType: String = "tv",
+    val score: Int = 0,
+    val numEpisodes: Int = 0,
+)
+
+data class SyncHistoryEntry(
+    val timestampMs: Long,
+    val totalCount: Int,
+    val syncedCount: Int,
+    val newlyAddedCount: Int,
+    val notFoundCount: Int,
+    val errorCount: Int,
+    val skippedCount: Int,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("timestampMs", timestampMs)
+        put("totalCount", totalCount)
+        put("syncedCount", syncedCount)
+        put("newlyAddedCount", newlyAddedCount)
+        put("notFoundCount", notFoundCount)
+        put("errorCount", errorCount)
+        put("skippedCount", skippedCount)
+    }
+}
+
+fun JSONObject.toSyncHistoryEntry() = SyncHistoryEntry(
+    timestampMs = optLong("timestampMs", 0L),
+    totalCount = optInt("totalCount", 0),
+    syncedCount = optInt("syncedCount", 0),
+    newlyAddedCount = optInt("newlyAddedCount", 0),
+    notFoundCount = optInt("notFoundCount", 0),
+    errorCount = optInt("errorCount", 0),
+    skippedCount = optInt("skippedCount", 0),
 )
 
 fun SyncEntry.toJson(): JSONObject = JSONObject().apply {
@@ -29,6 +62,9 @@ fun SyncEntry.toJson(): JSONObject = JSONObject().apply {
     put("sonarrId", sonarrId ?: JSONObject.NULL)
     put("syncStatus", syncStatus.name)
     put("errorMessage", errorMessage ?: JSONObject.NULL)
+    put("mediaType", mediaType)
+    put("score", score)
+    put("numEpisodes", numEpisodes)
 }
 
 fun JSONObject.toSyncEntry(): SyncEntry = SyncEntry(
@@ -41,7 +77,18 @@ fun JSONObject.toSyncEntry(): SyncEntry = SyncEntry(
     sonarrId = if (isNull("sonarrId")) null else optInt("sonarrId"),
     syncStatus = runCatching { SyncStatus.valueOf(getString("syncStatus")) }.getOrDefault(SyncStatus.PENDING),
     errorMessage = if (isNull("errorMessage")) null else optString("errorMessage"),
+    mediaType = optString("mediaType", "tv"),
+    score = optInt("score", 0),
+    numEpisodes = optInt("numEpisodes", 0),
 )
+
+/** Determine Sonarr monitoring string from MAL user score & configured thresholds. */
+private fun monitoringForScore(score: Int, highThreshold: Int, medThreshold: Int): String = when {
+    score <= 0 -> "all"           // unrated → monitor all
+    score >= highThreshold -> "all"
+    score >= medThreshold -> "future"
+    else -> "none"
+}
 
 class SyncRepository(private val context: Context) {
 
@@ -59,6 +106,15 @@ class SyncRepository(private val context: Context) {
         }.getOrDefault(emptyList())
     }
 
+    /** Load sync history (newest first, capped at 20). */
+    suspend fun loadSyncHistory(): List<SyncHistoryEntry> {
+        val json = prefs.syncHistoryJson.first()
+        return runCatching {
+            val arr = JSONArray(json)
+            List(arr.length()) { arr.getJSONObject(it).toSyncHistoryEntry() }
+        }.getOrDefault(emptyList())
+    }
+
     private suspend fun saveSyncData(entries: List<SyncEntry>) {
         val arr = JSONArray()
         entries.forEach { arr.put(it.toJson()) }
@@ -69,10 +125,43 @@ class SyncRepository(private val context: Context) {
         val entries: List<SyncEntry>,
         val totalCount: Int,
         val syncedCount: Int,
+        val newlyAddedCount: Int,
         val needSyncCount: Int,
         val errorCount: Int,
         val notFoundCount: Int,
+        val skippedCount: Int = 0,
     )
+
+    /** Returns true if this anime's mediaType should be skipped based on current filter prefs. */
+    private fun shouldSkip(
+        mediaType: String,
+        skipOVAs: Boolean,
+        skipSpecials: Boolean,
+        skipMovies: Boolean,
+        onlyMain: Boolean,
+    ): Boolean {
+        if (onlyMain && mediaType != "tv") return true
+        if (skipOVAs && mediaType == "ova") return true
+        if (skipSpecials && mediaType == "special") return true
+        if (skipMovies && mediaType == "movie") return true
+        return false
+    }
+
+    /** Check if a title is already in Sonarr — tries tvdbId match then fuzzy title match. */
+    private fun findInSonarr(
+        tvdbId: Int,
+        title: String,
+        sonarrByTvdbId: Map<Int, SonarrSeries>,
+        sonarrAll: List<SonarrSeries>,
+    ): SonarrSeries? {
+        sonarrByTvdbId[tvdbId]?.let { return it }
+        // Fuzzy fallback: check if any Sonarr series title/altTitle is ≥85% similar
+        val normSearch = title.lowercase()
+        return sonarrAll.firstOrNull { s ->
+            val allTitles = listOf(s.title) + s.alternateTitles
+            allTitles.any { t -> similarityPct(normSearch, t.lowercase()) >= 85.0 }
+        }
+    }
 
     /** Run a full sync: fetch MAL list → look up TVDB IDs → add missing to Sonarr. */
     suspend fun runSync(onProgress: suspend (String) -> Unit = {}): Result<SyncResult> = runCatching {
@@ -85,11 +174,18 @@ class SyncRepository(private val context: Context) {
         val tvdbApiKey = prefs.tvdbApiKey.first()
         val syncStatuses = prefs.syncStatuses.first()
 
+        val skipOVAs = prefs.skipOVAs.first()
+        val skipSpecials = prefs.skipSpecials.first()
+        val skipMovies = prefs.skipMovies.first()
+        val onlyMain = prefs.onlyMainSeries.first()
+        val scoreBasedMonitoring = prefs.scoreBasedMonitoring.first()
+        val scoreHigh = prefs.scoreHighThreshold.first()
+        val scoreMed = prefs.scoreMedThreshold.first()
+
         check(sonarrUrl.isNotBlank()) { "Sonarr URL is not configured" }
         check(sonarrApiKey.isNotBlank()) { "Sonarr API key is not configured" }
         check(tvdbApiKey.isNotBlank()) { "TVDB API key is not configured" }
 
-        // Resolve root folder: use stored or pick first available
         val effectiveRootFolder = if (rootFolder.isNotBlank()) rootFolder else {
             onProgress("Fetching Sonarr root folders…")
             sonarrRepo.getRootFolders(sonarrUrl, sonarrApiKey).getOrThrow().firstOrNull()?.path
@@ -105,27 +201,34 @@ class SyncRepository(private val context: Context) {
 
         val entries = mutableListOf<SyncEntry>()
         var syncedCount = 0
-        var needSyncCount = 0
+        var newlyAddedCount = 0
         var errorCount = 0
         var notFoundCount = 0
+        var skippedCount = 0
 
         for ((index, anime) in malEntries.withIndex()) {
             onProgress("Processing ${index + 1}/${malEntries.size}: ${anime.title}")
 
-            // Check if already in Sonarr by searching TVDB first
+            if (shouldSkip(anime.mediaType, skipOVAs, skipSpecials, skipMovies, onlyMain)) {
+                entries.add(SyncEntry(
+                    malId = anime.malId, malTitle = anime.title, malStatus = anime.status,
+                    imageUrl = anime.imageUrl, tvdbId = null, tvdbTitle = null, sonarrId = null,
+                    syncStatus = SyncStatus.SKIPPED, errorMessage = "Filtered by type: ${anime.mediaType}",
+                    mediaType = anime.mediaType, score = anime.score, numEpisodes = anime.numEpisodes,
+                ))
+                skippedCount++
+                continue
+            }
+
             val tvdbResult = runCatching { tvdbRepo.searchSeries(tvdbApiKey, anime.title).getOrNull() }
 
             if (tvdbResult.isFailure) {
                 entries.add(SyncEntry(
-                    malId = anime.malId,
-                    malTitle = anime.title,
-                    malStatus = anime.status,
-                    imageUrl = anime.imageUrl,
-                    tvdbId = null,
-                    tvdbTitle = null,
-                    sonarrId = null,
+                    malId = anime.malId, malTitle = anime.title, malStatus = anime.status,
+                    imageUrl = anime.imageUrl, tvdbId = null, tvdbTitle = null, sonarrId = null,
                     syncStatus = SyncStatus.ERROR,
                     errorMessage = tvdbResult.exceptionOrNull()?.message ?: "TVDB lookup failed",
+                    mediaType = anime.mediaType, score = anime.score, numEpisodes = anime.numEpisodes,
                 ))
                 errorCount++
                 continue
@@ -134,38 +237,32 @@ class SyncRepository(private val context: Context) {
             val tvdb = tvdbResult.getOrNull()
             if (tvdb == null) {
                 entries.add(SyncEntry(
-                    malId = anime.malId,
-                    malTitle = anime.title,
-                    malStatus = anime.status,
-                    imageUrl = anime.imageUrl,
-                    tvdbId = null,
-                    tvdbTitle = null,
-                    sonarrId = null,
-                    syncStatus = SyncStatus.NOT_FOUND,
-                    errorMessage = "Not found on TVDB",
+                    malId = anime.malId, malTitle = anime.title, malStatus = anime.status,
+                    imageUrl = anime.imageUrl, tvdbId = null, tvdbTitle = null, sonarrId = null,
+                    syncStatus = SyncStatus.NOT_FOUND, errorMessage = "Not found on TVDB",
+                    mediaType = anime.mediaType, score = anime.score, numEpisodes = anime.numEpisodes,
                 ))
                 notFoundCount++
                 continue
             }
 
-            val existingSonarr = sonarrByTvdbId[tvdb.tvdbId]
+            val existingSonarr = findInSonarr(tvdb.tvdbId, tvdb.name, sonarrByTvdbId, sonarrSeries)
             if (existingSonarr != null) {
                 entries.add(SyncEntry(
-                    malId = anime.malId,
-                    malTitle = anime.title,
-                    malStatus = anime.status,
-                    imageUrl = anime.imageUrl,
-                    tvdbId = tvdb.tvdbId,
-                    tvdbTitle = tvdb.name,
-                    sonarrId = existingSonarr.id,
-                    syncStatus = SyncStatus.SYNCED,
-                    errorMessage = null,
+                    malId = anime.malId, malTitle = anime.title, malStatus = anime.status,
+                    imageUrl = anime.imageUrl, tvdbId = tvdb.tvdbId, tvdbTitle = tvdb.name,
+                    sonarrId = existingSonarr.id, syncStatus = SyncStatus.SYNCED, errorMessage = null,
+                    mediaType = anime.mediaType, score = anime.score, numEpisodes = anime.numEpisodes,
                 ))
                 syncedCount++
                 continue
             }
 
-            // Not in Sonarr yet — add it
+            // Determine monitoring level from score
+            val monitoring = if (scoreBasedMonitoring && anime.score > 0) {
+                monitoringForScore(anime.score, scoreHigh, scoreMed)
+            } else "all"
+
             val addResult = sonarrRepo.addSeries(
                 url = sonarrUrl,
                 apiKey = sonarrApiKey,
@@ -173,58 +270,96 @@ class SyncRepository(private val context: Context) {
                 title = tvdb.name,
                 rootFolderPath = effectiveRootFolder,
                 qualityProfileId = qualityProfileId,
+                monitored = monitoring != "none",
             )
 
             if (addResult.isSuccess) {
                 entries.add(SyncEntry(
-                    malId = anime.malId,
-                    malTitle = anime.title,
-                    malStatus = anime.status,
-                    imageUrl = anime.imageUrl,
-                    tvdbId = tvdb.tvdbId,
-                    tvdbTitle = tvdb.name,
-                    sonarrId = addResult.getOrNull(),
-                    syncStatus = SyncStatus.SYNCED,
-                    errorMessage = null,
+                    malId = anime.malId, malTitle = anime.title, malStatus = anime.status,
+                    imageUrl = anime.imageUrl, tvdbId = tvdb.tvdbId, tvdbTitle = tvdb.name,
+                    sonarrId = addResult.getOrNull(), syncStatus = SyncStatus.SYNCED, errorMessage = null,
+                    mediaType = anime.mediaType, score = anime.score, numEpisodes = anime.numEpisodes,
                 ))
                 syncedCount++
+                newlyAddedCount++
             } else {
                 val errMsg = addResult.exceptionOrNull()?.message ?: "Failed to add to Sonarr"
                 val isAlreadyExists = errMsg.contains("already", ignoreCase = true)
                 entries.add(SyncEntry(
-                    malId = anime.malId,
-                    malTitle = anime.title,
-                    malStatus = anime.status,
-                    imageUrl = anime.imageUrl,
-                    tvdbId = tvdb.tvdbId,
-                    tvdbTitle = tvdb.name,
+                    malId = anime.malId, malTitle = anime.title, malStatus = anime.status,
+                    imageUrl = anime.imageUrl, tvdbId = tvdb.tvdbId, tvdbTitle = tvdb.name,
                     sonarrId = null,
                     syncStatus = if (isAlreadyExists) SyncStatus.SYNCED else SyncStatus.ERROR,
                     errorMessage = if (isAlreadyExists) null else errMsg,
+                    mediaType = anime.mediaType, score = anime.score, numEpisodes = anime.numEpisodes,
                 ))
-                if (isAlreadyExists) syncedCount++ else errorCount++
+                if (isAlreadyExists) { syncedCount++; newlyAddedCount++ } else errorCount++
             }
         }
 
-        needSyncCount = entries.count { it.syncStatus == SyncStatus.PENDING }
+        val needSyncCount = entries.count { it.syncStatus == SyncStatus.PENDING }
         saveSyncData(entries)
+
+        // Save history entry
+        val historyEntry = SyncHistoryEntry(
+            timestampMs = System.currentTimeMillis(),
+            totalCount = entries.size,
+            syncedCount = syncedCount,
+            newlyAddedCount = newlyAddedCount,
+            notFoundCount = notFoundCount,
+            errorCount = errorCount,
+            skippedCount = skippedCount,
+        )
+        prefs.appendSyncHistory(historyEntry.toJson().toString())
 
         SyncResult(
             entries = entries,
             totalCount = entries.size,
             syncedCount = syncedCount,
+            newlyAddedCount = newlyAddedCount,
             needSyncCount = needSyncCount,
             errorCount = errorCount,
             notFoundCount = notFoundCount,
+            skippedCount = skippedCount,
         )
+    }
+
+    /**
+     * Compute which Sonarr series are NOT in the current MAL sync data.
+     * Returns a list of Sonarr series that may be candidates for removal.
+     */
+    suspend fun computeRemovalDiff(): Result<List<SonarrSeries>> = runCatching {
+        val sonarrUrl = prefs.sonarrUrl.first()
+        val sonarrApiKey = prefs.sonarrApiKey.first()
+        check(sonarrUrl.isNotBlank()) { "Sonarr URL is not configured" }
+        check(sonarrApiKey.isNotBlank()) { "Sonarr API key is not configured" }
+
+        val sonarrSeries = sonarrRepo.getSeries(sonarrUrl, sonarrApiKey).getOrThrow()
+        val cachedEntries = loadCachedSyncData()
+        val syncedTvdbIds = cachedEntries.mapNotNull { it.tvdbId }.toSet()
+
+        sonarrSeries.filter { it.tvdbId !in syncedTvdbIds && it.tvdbId != -1 }
+    }
+
+    /** Remove the given Sonarr series IDs. Returns count of successfully removed. */
+    suspend fun runRemoval(seriesIds: List<Int>, deleteFiles: Boolean): Result<Int> = runCatching {
+        val sonarrUrl = prefs.sonarrUrl.first()
+        val sonarrApiKey = prefs.sonarrApiKey.first()
+        var removed = 0
+        for (id in seriesIds) {
+            sonarrRepo.removeSeries(sonarrUrl, sonarrApiKey, id, deleteFiles).onSuccess { removed++ }
+        }
+        removed
     }
 
     fun computeStats(entries: List<SyncEntry>) = SyncResult(
         entries = entries,
         totalCount = entries.size,
         syncedCount = entries.count { it.syncStatus == SyncStatus.SYNCED },
+        newlyAddedCount = 0,
         needSyncCount = entries.count { it.syncStatus == SyncStatus.PENDING },
         errorCount = entries.count { it.syncStatus == SyncStatus.ERROR },
         notFoundCount = entries.count { it.syncStatus == SyncStatus.NOT_FOUND },
+        skippedCount = entries.count { it.syncStatus == SyncStatus.SKIPPED },
     )
 }
