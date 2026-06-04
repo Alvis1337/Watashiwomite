@@ -49,7 +49,7 @@ class AppPreferences(private val context: Context) {
 
     val setupDone: Flow<Boolean?> = context.dataStore.data
         .catch { emit(emptyPreferences()) }
-        .map { it[SETUP_DONE] }
+        .map { it[SETUP_DONE] ?: false }
 
     suspend fun setSetupDone(done: Boolean) {
         context.dataStore.edit { it[SETUP_DONE] = done }
