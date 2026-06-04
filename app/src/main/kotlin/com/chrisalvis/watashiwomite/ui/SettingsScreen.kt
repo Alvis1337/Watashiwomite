@@ -1,5 +1,7 @@
 package com.chrisalvis.watashiwomite.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -10,19 +12,47 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chrisalvis.watashiwomite.BuildConfig
+import com.chrisalvis.watashiwomite.data.AppPreferences
+import com.chrisalvis.watashiwomite.data.DownloadState
+import com.chrisalvis.watashiwomite.data.UpdateCheckResult
+import com.chrisalvis.watashiwomite.data.UpdateRepository
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(vm: SettingsViewModel, onSetupAgain: () -> Unit) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showSonarrApiKey by remember { mutableStateOf(false) }
     var showTvdbApiKey by remember { mutableStateOf(false) }
+
+    // Update checker state
+    var updateCheckState by remember { mutableStateOf<UpdateCheckResult?>(null) }
+    var updateChecking by remember { mutableStateOf(false) }
+    var pendingUpdateInfo by remember { mutableStateOf<com.chrisalvis.watashiwomite.data.UpdateInfo?>(null) }
+    var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
+
+    // Auto-check on open — show dialog if update available and not ignored
+    LaunchedEffect(Unit) {
+        val prefs = AppPreferences(context)
+        val ignoredVersion = prefs.ignoredUpdateVersion.first()
+        val result = UpdateRepository.checkForUpdate()
+        updateCheckState = result
+        if (result is UpdateCheckResult.UpdateAvailable &&
+            result.info.versionCode != ignoredVersion) {
+            pendingUpdateInfo = result.info
+        }
+    }
 
     if (showLogoutDialog) {
         AlertDialog(
@@ -39,6 +69,114 @@ fun SettingsScreen(vm: SettingsViewModel, onSetupAgain: () -> Unit) {
                 TextButton(onClick = { showLogoutDialog = false }) { Text("Cancel") }
             }
         )
+    }
+
+    // Update available dialog
+    pendingUpdateInfo?.let { info ->
+        val isDownloading = downloadState is DownloadState.Progress || downloadState is DownloadState.Installing
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { if (!isDownloading) pendingUpdateInfo = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .padding(vertical = 24.dp),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Update Available", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("v${info.versionName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                        }
+                        Icon(Icons.Default.SystemUpdateAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                    }
+
+                    HorizontalDivider()
+
+                    if (info.releaseNotes.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("What's New", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 260.dp)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                formatChangelogLines(info.releaseNotes).forEach { (text, isHeader) ->
+                                    if (text.isBlank()) {
+                                        Spacer(Modifier.size(4.dp))
+                                    } else if (isHeader) {
+                                        Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 6.dp))
+                                    } else {
+                                        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    when (val ds = downloadState) {
+                        is DownloadState.Progress -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Downloading… ${ds.percent}%", style = MaterialTheme.typography.bodySmall)
+                            LinearProgressIndicator(progress = { ds.percent / 100f }, modifier = Modifier.fillMaxWidth())
+                        }
+                        is DownloadState.Installing -> Text("Opening installer…", style = MaterialTheme.typography.bodySmall)
+                        is DownloadState.Failed -> Text("Failed: ${ds.message}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        else -> {}
+                    }
+
+                    HorizontalDivider()
+
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                UpdateRepository.downloadAndInstall(context, info) { ds ->
+                                    downloadState = ds
+                                    if (ds is DownloadState.Installing) {
+                                        pendingUpdateInfo = null
+                                        downloadState = DownloadState.Idle
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isDownloading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isDownloading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(if (isDownloading) "Downloading…" else "Download & Install")
+                    }
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { pendingUpdateInfo = null; downloadState = DownloadState.Idle },
+                            enabled = !isDownloading,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Later") }
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    AppPreferences(context).setIgnoredUpdateVersion(info.versionCode)
+                                    pendingUpdateInfo = null
+                                    downloadState = DownloadState.Idle
+                                }
+                            },
+                            enabled = !isDownloading,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) { Text("Ignore") }
+                    }
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -321,6 +459,85 @@ fun SettingsScreen(vm: SettingsViewModel, onSetupAgain: () -> Unit) {
                 }
             }
 
+            // ── About Section ─────────────────────────────────────────────────
+            SettingsSection(title = "About") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Version", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                val updateAvailable = updateCheckState is UpdateCheckResult.UpdateAvailable
+                OutlinedButton(
+                    onClick = {
+                        if (updateAvailable) {
+                            pendingUpdateInfo = (updateCheckState as UpdateCheckResult.UpdateAvailable).info
+                        } else {
+                            updateChecking = true
+                            scope.launch {
+                                val result = UpdateRepository.checkForUpdate()
+                                updateCheckState = result
+                                updateChecking = false
+                                if (result is UpdateCheckResult.UpdateAvailable) {
+                                    pendingUpdateInfo = result.info
+                                } else if (result is UpdateCheckResult.UpToDate) {
+                                    android.widget.Toast.makeText(context, "You're up to date!", android.widget.Toast.LENGTH_SHORT).show()
+                                } else if (result is UpdateCheckResult.Error) {
+                                    android.widget.Toast.makeText(context, "Update check failed: ${result.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !updateChecking,
+                ) {
+                    if (updateChecking) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Checking…")
+                    } else if (updateAvailable) {
+                        Icon(Icons.Default.SystemUpdateAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        val info = (updateCheckState as UpdateCheckResult.UpdateAvailable).info
+                        Text("Update available — v${info.versionName}")
+                    } else {
+                        Icon(Icons.Default.SystemUpdateAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Check for Updates")
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://alvis1337.github.io/Watashiwomite/privacy/"))
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Privacy Policy") }
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://alvis1337.github.io/Watashiwomite/terms/"))
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Terms of Service") }
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://alvis1337.github.io/Watashiwomite/"))
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Website") }
+            }
+
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -373,3 +590,18 @@ private fun FeedbackCard(message: String, success: Boolean) {
         }
     }
 }
+
+private fun formatChangelogLines(raw: String): List<Pair<String, Boolean>> =
+    raw.lines().map { line ->
+        val t = line.trim()
+            .replace(Regex("\\*\\*(.*?)\\*\\*"), "$1")
+            .replace(Regex("\\*(.*?)\\*"), "$1")
+            .replace(Regex("`(.*?)`"), "$1")
+        when {
+            t.startsWith("### ") -> t.removePrefix("### ") to true
+            t.startsWith("## ")  -> t.removePrefix("## ")  to true
+            t.startsWith("# ")   -> t.removePrefix("# ")   to true
+            t.startsWith("- ") || t.startsWith("* ") -> "• ${t.drop(2)}" to false
+            else -> t to false
+        }
+    }

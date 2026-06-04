@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy · Watashiwomite</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 40px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    nav .logo {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    nav .links a {
+      color: var(--muted);
+      text-decoration: none;
+      margin-left: 24px;
+      font-size: 0.9rem;
+    }
+    nav .links a:hover { color: var(--text); }
+    .content {
+      max-width: 760px;
+      margin: 60px auto 80px;
+      padding: 0 24px;
+    }
+    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
+    .date { color: var(--muted); font-size: 0.875rem; margin-bottom: 40px; }
+    h2 { font-size: 1.1rem; font-weight: 700; margin: 32px 0 10px; color: var(--accent); }
+    p { color: var(--muted); font-size: 0.95rem; line-height: 1.75; margin-bottom: 12px; }
+    ul { color: var(--muted); font-size: 0.95rem; line-height: 1.75; padding-left: 20px; margin-bottom: 12px; }
+    li { margin-bottom: 4px; }
+    footer {
+      text-align: center;
+      padding: 32px 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--muted); text-decoration: none; margin: 0 12px; }
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/Watashiwomite/" class="logo">← Watashiwomite</a>
+  <div class="links">
+    <a href="/Watashiwomite/terms/">Terms of Service</a>
+  </div>
+</nav>
+
+<div class="content">
+  <h1>Privacy Policy</h1>
+  <p class="date">Last updated: June 2025</p>
+
+  <h2>Overview</h2>
+  <p>
+    Watashiwomite is a free, open-source Android app that syncs your MyAnimeList (MAL) library
+    with a Sonarr instance that <strong>you</strong> own and operate. We take your privacy seriously.
+    This policy describes what data the app collects, where it goes, and what we never do.
+  </p>
+
+  <h2>Data We Collect</h2>
+  <p>The app stores the following data <strong>locally on your device only</strong>:</p>
+  <ul>
+    <li>Your MAL OAuth2 access and refresh tokens (used to fetch your anime list)</li>
+    <li>Your MAL username (displayed in the app)</li>
+    <li>Your Sonarr URL and API key (used to add/query series)</li>
+    <li>Your TVDB API key (used to look up series metadata)</li>
+    <li>Sync history and results (cached locally for the dashboard)</li>
+    <li>App preferences (episode filters, quality profiles, etc.)</li>
+  </ul>
+  <p>None of this data is transmitted to any server we operate.</p>
+
+  <h2>Third-Party Services</h2>
+  <p>The app communicates directly with the following third-party services <em>on your behalf</em>:</p>
+  <ul>
+    <li><strong>MyAnimeList (myanimelist.net)</strong> — to authenticate and retrieve your anime list</li>
+    <li><strong>TVDB (thetvdb.com)</strong> — to search for series metadata and match anime titles</li>
+    <li><strong>Sonarr</strong> — your self-hosted instance; data goes directly to your server</li>
+    <li><strong>GitHub (api.github.com)</strong> — to check for app updates (release metadata only; no personal data sent)</li>
+  </ul>
+  <p>Please review each service's own privacy policy for how they handle your data.</p>
+
+  <h2>Data We Do NOT Collect</h2>
+  <ul>
+    <li>We do not collect analytics, crash reports, or usage telemetry</li>
+    <li>We do not transmit your credentials or tokens to any server we control</li>
+    <li>We do not use advertising SDKs</li>
+    <li>We do not sell or share any data with third parties</li>
+  </ul>
+
+  <h2>Permissions</h2>
+  <p>The app requests the following Android permissions:</p>
+  <ul>
+    <li><strong>INTERNET</strong> — required to communicate with MAL, TVDB, Sonarr, and GitHub</li>
+    <li><strong>REQUEST_INSTALL_PACKAGES</strong> — used only when you choose to install an in-app update</li>
+    <li><strong>READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE</strong> — used only to save the downloaded update APK to external files</li>
+  </ul>
+
+  <h2>Data Deletion</h2>
+  <p>
+    All data is stored locally on your device using Android DataStore. You can clear all app data
+    at any time via Android Settings → Apps → Watashiwomite → Clear Data.
+    Uninstalling the app removes all locally stored data.
+  </p>
+
+  <h2>Children's Privacy</h2>
+  <p>
+    This app is not directed at children under 13 and we do not knowingly collect personal
+    information from anyone under 13.
+  </p>
+
+  <h2>Changes to This Policy</h2>
+  <p>
+    If we make material changes to this policy, we will update the "Last updated" date above.
+    Continued use of the app after changes constitutes acceptance of the revised policy.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Questions? Open an issue at
+    <a href="https://github.com/Alvis1337/Watashiwomite/issues" style="color: var(--accent);">
+      github.com/Alvis1337/Watashiwomite
+    </a>.
+  </p>
+</div>
+
+<footer>
+  <a href="/Watashiwomite/">Home</a>
+  <a href="/Watashiwomite/terms/">Terms of Service</a>
+  <a href="https://github.com/Alvis1337/Watashiwomite">GitHub</a>
+</footer>
+
+</body>
+</html>

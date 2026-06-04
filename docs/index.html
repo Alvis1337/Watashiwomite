@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Watashiwomite</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 40px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    nav .logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    nav .links a {
+      color: var(--muted);
+      text-decoration: none;
+      margin-left: 24px;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    nav .links a:hover { color: var(--text); }
+
+    .hero {
+      max-width: 760px;
+      margin: 80px auto 0;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+    .hero p {
+      color: var(--muted);
+      font-size: 1.15rem;
+      line-height: 1.7;
+      margin-bottom: 36px;
+    }
+    .badge-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .badge-row a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .badge-row a:hover { opacity: 0.85; }
+    .btn-primary {
+      background: var(--accent);
+      color: #0d1117;
+    }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .features {
+      max-width: 900px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .feature-card .icon {
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+    }
+    .feature-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      color: var(--muted);
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+
+    footer {
+      text-align: center;
+      padding: 32px 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--muted); text-decoration: none; margin: 0 12px; }
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo">Watashiwomite</a>
+  <div class="links">
+    <a href="https://github.com/Alvis1337/Watashiwomite/releases/latest">Download</a>
+    <a href="https://github.com/Alvis1337/Watashiwomite">GitHub</a>
+    <a href="/Watashiwomite/privacy/">Privacy</a>
+    <a href="/Watashiwomite/terms/">Terms</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <h1>Watashiwomite</h1>
+  <p>
+    Sync your MyAnimeList anime library directly into Sonarr — automatically.<br />
+    Track watching status, monitor downloads, and keep your collection up to date.
+  </p>
+  <div class="badge-row">
+    <a href="https://github.com/Alvis1337/Watashiwomite/releases/latest" class="btn-primary">
+      ⬇ Download APK
+    </a>
+    <a href="https://github.com/Alvis1337/Watashiwomite" class="btn-secondary">
+      ★ View on GitHub
+    </a>
+  </div>
+</section>
+
+<section class="features">
+  <div class="feature-card">
+    <div class="icon">🔗</div>
+    <h3>MAL OAuth2 Login</h3>
+    <p>Secure PKCE-based authentication with MyAnimeList. No passwords stored.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">📺</div>
+    <h3>Sonarr Integration</h3>
+    <p>Automatically add anime series to Sonarr with your chosen quality profile and root folder.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🔍</div>
+    <h3>TVDB Matching</h3>
+    <p>Fuzzy-matched series lookup with manual override support for hard-to-find titles.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">📊</div>
+    <h3>Download Status</h3>
+    <p>See exactly how much of each series has been downloaded, right in the dashboard.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🗓</div>
+    <h3>Sync Preview</h3>
+    <p>Preview what will be added before committing any changes to Sonarr.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🔄</div>
+    <h3>Auto Updates</h3>
+    <p>The app checks for new releases from GitHub and installs updates in one tap.</p>
+  </div>
+</section>
+
+<footer>
+  <p>
+    <a href="/Watashiwomite/privacy/">Privacy Policy</a>
+    <a href="/Watashiwomite/terms/">Terms of Service</a>
+    <a href="https://github.com/Alvis1337/Watashiwomite">GitHub</a>
+  </p>
+  <p style="margin-top:12px;">© 2025 Alvis1337 · Open source under MIT</p>
+</footer>
+
+</body>
+</html>

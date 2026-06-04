@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -63,6 +64,9 @@ class AppPreferences(private val context: Context) {
 
         // Manual TVDB overrides — JSON: {"malId_<id>": {"tvdbId": 123, "tvdbTitle": "Name"}}
         val MANUAL_TVDB_OVERRIDES = stringPreferencesKey("manual_tvdb_overrides")
+
+        // Auto-update: version code the user chose to ignore
+        val IGNORED_UPDATE_VERSION = intPreferencesKey("ignored_update_version")
 
         val DEFAULT_STATUSES = setOf("watching", "plan_to_watch")
     }
@@ -313,5 +317,15 @@ class AppPreferences(private val context: Context) {
             for (i in 0 until minOf(arr.length(), 19)) newArr.put(arr.getJSONObject(i))
             prefs[SYNC_HISTORY_JSON] = newArr.toString()
         }
+    }
+
+    // ── Auto-update ────────────────────────────────────────────────────────────
+
+    val ignoredUpdateVersion: Flow<Int> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }
+        .map { it[IGNORED_UPDATE_VERSION] ?: 0 }
+
+    suspend fun setIgnoredUpdateVersion(versionCode: Int) {
+        context.dataStore.edit { it[IGNORED_UPDATE_VERSION] = versionCode }
     }
 }
