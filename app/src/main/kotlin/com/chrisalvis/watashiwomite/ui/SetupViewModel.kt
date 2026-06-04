@@ -20,6 +20,8 @@ data class SetupUiState(
     val malUsername: String = "",
     val malClientId: String = "",
     val malClientSecret: String = "",
+    val malCallbackLoading: Boolean = false,
+    val malCallbackError: String? = null,
     val sonarrUrl: String = "",
     val sonarrApiKey: String = "",
     val sonarrTesting: Boolean = false,
@@ -69,6 +71,14 @@ class SetupViewModel(private val context: Context) : ViewModel() {
         _uiState.value = _uiState.value.copy(malClientSecret = secret)
     }
 
+    fun clearAuthUrl() {
+        _uiState.value = _uiState.value.copy(authUrl = "")
+    }
+
+    fun clearMalError() {
+        _uiState.value = _uiState.value.copy(malCallbackError = null)
+    }
+
     fun generateAuthUrl() {
         val clientId = _uiState.value.malClientId.trim()
         val clientSecret = _uiState.value.malClientSecret.trim()
@@ -89,11 +99,27 @@ class SetupViewModel(private val context: Context) : ViewModel() {
 
     fun handleMalCallback(code: String) {
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                malCallbackLoading = true,
+                malCallbackError = null,
+                authUrl = "", // prevent browser re-open on recompose
+            )
             val repo = com.chrisalvis.watashiwomite.data.MalRepository(context)
             val result = repo.exchangeCode(code)
             if (result.isSuccess) {
                 val username = prefs.malUsername.first()
-                _uiState.value = _uiState.value.copy(malIsLoggedIn = true, malUsername = username)
+                _uiState.value = _uiState.value.copy(
+                    malCallbackLoading = false,
+                    malIsLoggedIn = true,
+                    malUsername = username,
+                    step = SetupStep.SONARR, // auto-advance
+                )
+            } else {
+                val msg = result.exceptionOrNull()?.message ?: "Unknown error"
+                _uiState.value = _uiState.value.copy(
+                    malCallbackLoading = false,
+                    malCallbackError = msg,
+                )
             }
         }
     }

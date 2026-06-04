@@ -36,6 +36,7 @@ fun SetupScreen(
         if (state.authUrl.isNotBlank()) {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(state.authUrl))
             context.startActivity(intent)
+            vm.clearAuthUrl()  // prevent re-open on recompose
         }
     }
 
@@ -213,6 +214,46 @@ private fun MalStep(
         title = "Connect MyAnimeList",
         subtitle = "Authorize the app to read your anime list using OAuth 2.0. Your credentials are never stored on any server.",
     ) {
+        // Loading state while exchange is in progress
+        if (state.malCallbackLoading) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Column {
+                        Text("Verifying with MyAnimeList…", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("This may take a moment", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+                }
+            }
+        }
+
+        // Error state
+        if (state.malCallbackError != null) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp))
+                    Column {
+                        Text("Login failed", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text(state.malCallbackError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                    }
+                }
+            }
+        }
+
         if (state.malIsLoggedIn) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
@@ -230,7 +271,7 @@ private fun MalStep(
                     }
                 }
             }
-        } else {
+        } else if (!state.malCallbackLoading) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()
