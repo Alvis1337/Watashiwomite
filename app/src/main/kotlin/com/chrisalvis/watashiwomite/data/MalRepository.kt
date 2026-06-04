@@ -29,22 +29,26 @@ class MalRepository(private val context: Context) {
 
     companion object {
         const val REDIRECT_URI = "watashiwomite://callback"
+        // Hold the verifier in-process memory so exchangeCode() always gets exactly
+        // what buildAuthUrl() produced — no DataStore round-trip uncertainty.
+        @Volatile private var pendingVerifier: String = ""
     }
 
     private fun generateCodeVerifier(): String {
         val bytes = ByteArray(64)
         SecureRandom().nextBytes(bytes)
-        return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING).trim()
     }
 
     private fun generateCodeChallenge(verifier: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII))
-        return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING).trim()
     }
 
     suspend fun buildAuthUrl(): String {
         val verifier = generateCodeVerifier()
-        prefs.setMalCodeVerifier(verifier)
+        pendingVerifier = verifier          // primary: in-memory
+        prefs.setMalCodeVerifier(verifier)  // backup: DataStore (survives process kill)
         return Uri.Builder()
             .scheme("https")
             .authority("myanimelist.net")
@@ -60,8 +64,11 @@ class MalRepository(private val context: Context) {
 
     suspend fun exchangeCode(code: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val verifier = prefs.malCodeVerifier.first()
-            check(verifier.isNotBlank()) { "No code verifier stored — please restart the login flow" }
+            // Prefer in-memory verifier (same value that was sent in the auth URL).
+            // Fall back to DataStore in case the process was killed and recreated.
+            val verifier = pendingVerifier.ifBlank { prefs.malCodeVerifier.first() }
+            check(verifier.isNotBlank()) { "No code verifier — tap Login to start a new session" }
+            pendingVerifier = "" // consume
 
             val bodyBuilder = FormBody.Builder()
                 .add("client_id", BuildConfig.MAL_CLIENT_ID)
@@ -81,7 +88,7 @@ class MalRepository(private val context: Context) {
             http.newCall(req).execute().use { resp ->
                 val body = resp.body?.string() ?: ""
                 if (!resp.isSuccessful) {
-                    error("MAL token exchange failed (HTTP ${resp.code})\nclient_id=${BuildConfig.MAL_CLIENT_ID}\nredirect_uri=$REDIRECT_URI\n\nResponse:\n$body")
+                    error("MAL token exchange failed (HTTP ${resp.code})\nclient_id=${BuildConfig.MAL_CLIENT_ID}\nredirect_uri=$REDIRECT_URI\nverifier_len=${verifier.length}\n\nResponse:\n$body")
                 }
                 val json = JSONObject(body)
                 val accessToken = json.getString("access_token")
