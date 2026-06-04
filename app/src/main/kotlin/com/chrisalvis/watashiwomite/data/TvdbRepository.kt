@@ -115,7 +115,7 @@ class TvdbRepository {
             .url("https://api4.thetvdb.com/v4/search?query=$encodedTitle&type=series&limit=5")
             .header("Authorization", "Bearer $token")
             .build()
-        http.newCall(req).execute().use { resp ->
+        return http.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val json = JSONObject(resp.body?.string() ?: return null)
             val data = json.optJSONArray("data") ?: return null
