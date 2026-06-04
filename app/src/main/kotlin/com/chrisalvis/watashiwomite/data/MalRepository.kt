@@ -43,6 +43,7 @@ class MalRepository(private val context: Context) {
     }
 
     suspend fun buildAuthUrl(): String {
+        val clientId = prefs.malClientId.first().ifBlank { BuildConfig.MAL_CLIENT_ID }
         val verifier = generateCodeVerifier()
         prefs.setMalCodeVerifier(verifier)
         return Uri.Builder()
@@ -50,7 +51,7 @@ class MalRepository(private val context: Context) {
             .authority("myanimelist.net")
             .path("/v1/oauth2/authorize")
             .appendQueryParameter("response_type", "code")
-            .appendQueryParameter("client_id", BuildConfig.MAL_CLIENT_ID)
+            .appendQueryParameter("client_id", clientId)
             .appendQueryParameter("redirect_uri", REDIRECT_URI)
             .appendQueryParameter("code_challenge", generateCodeChallenge(verifier))
             .appendQueryParameter("code_challenge_method", "S256")
@@ -62,15 +63,17 @@ class MalRepository(private val context: Context) {
         runCatching {
             val verifier = prefs.malCodeVerifier.first()
             check(verifier.isNotBlank()) { "No code verifier stored" }
+            val clientId = prefs.malClientId.first().ifBlank { BuildConfig.MAL_CLIENT_ID }
+            val clientSecret = prefs.malClientSecret.first().ifBlank { BuildConfig.MAL_CLIENT_SECRET }
 
             val bodyBuilder = FormBody.Builder()
-                .add("client_id", BuildConfig.MAL_CLIENT_ID)
+                .add("client_id", clientId)
                 .add("grant_type", "authorization_code")
                 .add("code", code)
                 .add("redirect_uri", REDIRECT_URI)
                 .add("code_verifier", verifier)
-            if (BuildConfig.MAL_CLIENT_SECRET.isNotBlank()) {
-                bodyBuilder.add("client_secret", BuildConfig.MAL_CLIENT_SECRET)
+            if (clientSecret.isNotBlank()) {
+                bodyBuilder.add("client_secret", clientSecret)
             }
 
             val req = Request.Builder()
@@ -105,13 +108,15 @@ class MalRepository(private val context: Context) {
         runCatching {
             val refreshToken = prefs.malRefreshToken.first()
             check(refreshToken.isNotBlank()) { "No refresh token stored" }
+            val clientId = prefs.malClientId.first().ifBlank { BuildConfig.MAL_CLIENT_ID }
+            val clientSecret = prefs.malClientSecret.first().ifBlank { BuildConfig.MAL_CLIENT_SECRET }
 
             val bodyBuilder = FormBody.Builder()
                 .add("grant_type", "refresh_token")
                 .add("refresh_token", refreshToken)
-                .add("client_id", BuildConfig.MAL_CLIENT_ID)
-            if (BuildConfig.MAL_CLIENT_SECRET.isNotBlank()) {
-                bodyBuilder.add("client_secret", BuildConfig.MAL_CLIENT_SECRET)
+                .add("client_id", clientId)
+            if (clientSecret.isNotBlank()) {
+                bodyBuilder.add("client_secret", clientSecret)
             }
 
             val req = Request.Builder()

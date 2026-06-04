@@ -62,6 +62,23 @@ fun SettingsScreen(vm: SettingsViewModel, onSetupAgain: () -> Unit) {
 
             // ── MAL Section ──────────────────────────────────────────────────
             SettingsSection(title = "MyAnimeList") {
+                // Client ID field — always shown so it can be updated
+                OutlinedTextField(
+                    value = state.malClientId,
+                    onValueChange = vm::setMalClientId,
+                    label = { Text("MAL Client ID") },
+                    leadingIcon = { Icon(Icons.Default.Key, null) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(
+                    onClick = vm::saveMalClientId,
+                    enabled = state.malClientId.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Save Client ID") }
+
+                HorizontalDivider()
+
                 if (state.malIsLoggedIn) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),

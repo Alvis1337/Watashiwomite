@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 data class SettingsUiState(
     val malUsername: String = "",
     val malIsLoggedIn: Boolean = false,
+    val malClientId: String = "",
     val sonarrUrl: String = "",
     val sonarrApiKey: String = "",
     val sonarrRootFolder: String = "",
@@ -47,12 +48,23 @@ class SettingsViewModel(private val context: Context) : ViewModel() {
             _uiState.value = SettingsUiState(
                 malUsername = prefs.malUsername.first(),
                 malIsLoggedIn = prefs.malIsLoggedIn.first(),
+                malClientId = prefs.malClientId.first(),
                 sonarrUrl = prefs.sonarrUrl.first(),
                 sonarrApiKey = prefs.sonarrApiKey.first(),
                 sonarrRootFolder = prefs.sonarrRootFolder.first(),
                 sonarrQualityProfileId = prefs.sonarrQualityProfileId.first(),
                 tvdbApiKey = prefs.tvdbApiKey.first(),
             )
+        }
+    }
+
+    fun setMalClientId(id: String) {
+        _uiState.value = _uiState.value.copy(malClientId = id)
+    }
+
+    fun saveMalClientId() {
+        viewModelScope.launch {
+            prefs.setMalClientCredentials(_uiState.value.malClientId.trim(), "")
         }
     }
 

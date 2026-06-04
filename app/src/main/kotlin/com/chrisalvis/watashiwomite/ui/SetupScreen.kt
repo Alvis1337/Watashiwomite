@@ -67,6 +67,8 @@ fun SetupScreen(
                 when (step) {
                     SetupStep.MAL -> MalStep(
                         state = state,
+                        onClientIdChange = vm::setMalClientId,
+                        onClientSecretChange = vm::setMalClientSecret,
                         onLogin = { vm.generateAuthUrl() },
                         onNext = { vm.goToStep(SetupStep.SONARR) },
                     )
@@ -199,13 +201,16 @@ private fun StepCard(
 @Composable
 private fun MalStep(
     state: SetupUiState,
+    onClientIdChange: (String) -> Unit,
+    onClientSecretChange: (String) -> Unit,
     onLogin: () -> Unit,
     onNext: () -> Unit,
 ) {
+    var showSecret by remember { mutableStateOf(false) }
     StepCard(
         icon = Icons.Default.Person,
         title = "Connect MyAnimeList",
-        subtitle = "Authorize the app to read your anime list using OAuth 2.0. Your credentials are never stored.",
+        subtitle = "Authorize the app to read your anime list using OAuth 2.0. Your credentials are never stored on any server.",
     ) {
         if (state.malIsLoggedIn) {
             Card(
@@ -229,17 +234,48 @@ private fun MalStep(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("You'll need a MAL API application:", style = MaterialTheme.typography.labelMedium)
-                    Text("1. Go to myanimelist.net/apiconfig\n2. Create an app with redirect URI:\n   watashiwomite://callback\n3. Add Client ID/Secret to local.properties",
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Register a MAL API app at:", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        "myanimelist.net/apiconfig",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Set redirect URI to:  watashiwomite://callback",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
+
+            OutlinedTextField(
+                value = state.malClientId,
+                onValueChange = onClientIdChange,
+                label = { Text("MAL Client ID") },
+                leadingIcon = { Icon(Icons.Default.Key, null) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = state.malClientSecret,
+                onValueChange = onClientSecretChange,
+                label = { Text("MAL Client Secret (optional)") },
+                leadingIcon = { Icon(Icons.Default.Lock, null) },
+                trailingIcon = {
+                    IconButton(onClick = { showSecret = !showSecret }) {
+                        Icon(if (showSecret) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                    }
+                },
+                visualTransformation = if (showSecret) VisualTransformation.None else PasswordVisualTransformation(),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             Button(
                 onClick = onLogin,
-                enabled = !state.isGeneratingAuthUrl,
+                enabled = state.malClientId.isNotBlank() && !state.isGeneratingAuthUrl,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (state.isGeneratingAuthUrl) {

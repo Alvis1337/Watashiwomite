@@ -20,6 +20,10 @@ class AppPreferences(private val context: Context) {
     companion object {
         val SETUP_DONE = booleanPreferencesKey("setup_done")
 
+        // MAL API credentials (user-entered, override BuildConfig values)
+        val MAL_CLIENT_ID_KEY = stringPreferencesKey("mal_client_id")
+        val MAL_CLIENT_SECRET_KEY = stringPreferencesKey("mal_client_secret")
+
         // MAL auth
         val MAL_ACCESS_TOKEN = stringPreferencesKey("mal_access_token")
         val MAL_REFRESH_TOKEN = stringPreferencesKey("mal_refresh_token")
@@ -43,6 +47,23 @@ class AppPreferences(private val context: Context) {
         val LAST_SYNC_MS = stringPreferencesKey("last_sync_ms")
 
         val DEFAULT_STATUSES = setOf("watching", "plan_to_watch")
+    }
+
+    // ── MAL API credentials ────────────────────────────────────────────────────
+
+    val malClientId: Flow<String> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }
+        .map { it[MAL_CLIENT_ID_KEY] ?: "" }
+
+    val malClientSecret: Flow<String> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }
+        .map { it[MAL_CLIENT_SECRET_KEY] ?: "" }
+
+    suspend fun setMalClientCredentials(clientId: String, clientSecret: String) {
+        context.dataStore.edit { prefs ->
+            prefs[MAL_CLIENT_ID_KEY] = clientId.trim()
+            prefs[MAL_CLIENT_SECRET_KEY] = clientSecret.trim()
+        }
     }
 
     // ── Setup ──────────────────────────────────────────────────────────────────

@@ -18,6 +18,8 @@ data class SetupUiState(
     val step: SetupStep = SetupStep.MAL,
     val malIsLoggedIn: Boolean = false,
     val malUsername: String = "",
+    val malClientId: String = "",
+    val malClientSecret: String = "",
     val sonarrUrl: String = "",
     val sonarrApiKey: String = "",
     val sonarrTesting: Boolean = false,
@@ -44,12 +46,14 @@ class SetupViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             val isLoggedIn = prefs.malIsLoggedIn.first()
             val username = prefs.malUsername.first()
+            val storedClientId = prefs.malClientId.first()
             val storedSonarrUrl = prefs.sonarrUrl.first()
             val storedSonarrKey = prefs.sonarrApiKey.first()
             val storedTvdbKey = prefs.tvdbApiKey.first()
             _uiState.value = _uiState.value.copy(
                 malIsLoggedIn = isLoggedIn,
                 malUsername = username,
+                malClientId = storedClientId,
                 sonarrUrl = storedSonarrUrl,
                 sonarrApiKey = storedSonarrKey,
                 tvdbApiKey = storedTvdbKey,
@@ -57,9 +61,22 @@ class SetupViewModel(private val context: Context) : ViewModel() {
         }
     }
 
+    fun setMalClientId(id: String) {
+        _uiState.value = _uiState.value.copy(malClientId = id)
+    }
+
+    fun setMalClientSecret(secret: String) {
+        _uiState.value = _uiState.value.copy(malClientSecret = secret)
+    }
+
     fun generateAuthUrl() {
+        val clientId = _uiState.value.malClientId.trim()
+        val clientSecret = _uiState.value.malClientSecret.trim()
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isGeneratingAuthUrl = true)
+            if (clientId.isNotBlank()) {
+                prefs.setMalClientCredentials(clientId, clientSecret)
+            }
             val repo = com.chrisalvis.watashiwomite.data.MalRepository(context)
             val url = runCatching { repo.buildAuthUrl() }.getOrElse { "" }
             _uiState.value = _uiState.value.copy(authUrl = url, isGeneratingAuthUrl = false)
