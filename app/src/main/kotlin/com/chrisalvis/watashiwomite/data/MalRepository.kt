@@ -28,7 +28,7 @@ class MalRepository(private val context: Context) {
     private val http = OkHttpClient()
 
     companion object {
-        const val REDIRECT_URI = "watashiwomite://callback"
+        const val REDIRECT_URI = "rotato://callback"
     }
 
     private fun generateCodeVerifier(): String {
