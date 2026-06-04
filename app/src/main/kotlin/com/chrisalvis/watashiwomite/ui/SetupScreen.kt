@@ -235,15 +235,23 @@ private fun MalStep(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Register a MAL API app at:", style = MaterialTheme.typography.labelMedium)
+                    Text("At myanimelist.net/apiconfig, edit your app and add this exact redirect URI:", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(2.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            "watashiwomite://callback",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(2.dp))
                     Text(
-                        "myanimelist.net/apiconfig",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Set redirect URI to:  watashiwomite://callback",
+                        "This is different from rotato://callback — both can coexist in the same app.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
