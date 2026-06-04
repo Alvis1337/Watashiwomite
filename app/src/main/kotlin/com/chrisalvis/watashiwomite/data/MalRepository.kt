@@ -12,7 +12,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.IOException
-import java.security.MessageDigest
 import java.security.SecureRandom
 
 data class MalAnimeEntry(
@@ -37,18 +36,15 @@ class MalRepository(private val context: Context) {
     private fun generateCodeVerifier(): String {
         val bytes = ByteArray(64)
         SecureRandom().nextBytes(bytes)
-        return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING).trim()
-    }
-
-    private fun generateCodeChallenge(verifier: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII))
-        return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING).trim()
+        return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     }
 
     suspend fun buildAuthUrl(): String {
         val verifier = generateCodeVerifier()
         pendingVerifier = verifier          // primary: in-memory
         prefs.setMalCodeVerifier(verifier)  // backup: DataStore (survives process kill)
+        // MAL only supports "plain" PKCE — code_challenge == code_verifier (no SHA-256).
+        // See https://myanimelist.net/apiconfig/references/authorization
         return Uri.Builder()
             .scheme("https")
             .authority("myanimelist.net")
@@ -56,8 +52,8 @@ class MalRepository(private val context: Context) {
             .appendQueryParameter("response_type", "code")
             .appendQueryParameter("client_id", BuildConfig.MAL_CLIENT_ID)
             .appendQueryParameter("redirect_uri", REDIRECT_URI)
-            .appendQueryParameter("code_challenge", generateCodeChallenge(verifier))
-            .appendQueryParameter("code_challenge_method", "S256")
+            .appendQueryParameter("code_challenge", verifier)
+            .appendQueryParameter("code_challenge_method", "plain")
             .build()
             .toString()
     }
