@@ -7,7 +7,6 @@ import com.chrisalvis.watashiwomite.data.AppPreferences
 import com.chrisalvis.watashiwomite.data.SonarrRepository
 import com.chrisalvis.watashiwomite.data.SonarrSeries
 import com.chrisalvis.watashiwomite.data.SyncEntry
-import com.chrisalvis.watashiwomite.data.SyncHistoryEntry
 import com.chrisalvis.watashiwomite.data.SyncRepository
 import com.chrisalvis.watashiwomite.data.SyncStatus
 import com.chrisalvis.watashiwomite.data.TvdbRepository
@@ -29,15 +28,17 @@ data class DashboardUiState(
     val skippedCount: Int = 0,
     val lastSyncMs: Long? = null,
     val filterStatus: SyncStatus? = null,
-    val syncHistory: List<SyncHistoryEntry> = emptyList(),
     // Sonarr live stats: keyed by tvdbId
     val sonarrStats: Map<Int, SonarrSeries> = emptyMap(),
+    val sonarrUrl: String = "",
     // Manual TVDB match dialog state
     val manualOverrides: Map<Int, Pair<Int, String>> = emptyMap(),
     val matchTarget: SyncEntry? = null,
     val isSearching: Boolean = false,
     val searchResults: List<TvdbSeriesResult> = emptyList(),
     val searchError: String? = null,
+    // Detail sheet state
+    val selectedEntry: SyncEntry? = null,
 )
 
 class DashboardViewModel(private val context: Context) : ViewModel() {
@@ -61,8 +62,8 @@ class DashboardViewModel(private val context: Context) : ViewModel() {
             val lastSyncStr = prefs.lastSyncMs.first()
             val lastSyncMs = lastSyncStr.toLongOrNull()
             val stats = syncRepo.computeStats(entries)
-            val history = syncRepo.loadSyncHistory()
             val overrides = prefs.getManualTvdbOverrides()
+            val sonarrUrl = prefs.sonarrUrl.first()
             _uiState.value = DashboardUiState(
                 isLoading = false,
                 entries = entries,
@@ -73,8 +74,8 @@ class DashboardViewModel(private val context: Context) : ViewModel() {
                 notFoundCount = stats.notFoundCount,
                 skippedCount = stats.skippedCount,
                 lastSyncMs = lastSyncMs,
-                syncHistory = history,
                 manualOverrides = overrides,
+                sonarrUrl = sonarrUrl,
             )
             // Background: fetch live Sonarr stats
             fetchSonarrStats()
@@ -153,5 +154,13 @@ class DashboardViewModel(private val context: Context) : ViewModel() {
             val updated = prefs.getManualTvdbOverrides()
             _uiState.value = _uiState.value.copy(manualOverrides = updated)
         }
+    }
+
+    fun openDetail(entry: SyncEntry) {
+        _uiState.value = _uiState.value.copy(selectedEntry = entry)
+    }
+
+    fun dismissDetail() {
+        _uiState.value = _uiState.value.copy(selectedEntry = null)
     }
 }

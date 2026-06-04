@@ -1,5 +1,6 @@
 package com.chrisalvis.watashiwomite.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -26,7 +28,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.chrisalvis.watashiwomite.data.SonarrSeries
 import com.chrisalvis.watashiwomite.data.SyncEntry
-import com.chrisalvis.watashiwomite.data.SyncHistoryEntry
 import com.chrisalvis.watashiwomite.data.SyncStatus
 import com.chrisalvis.watashiwomite.data.TvdbSeriesResult
 import com.chrisalvis.watashiwomite.ui.theme.*
@@ -50,6 +51,19 @@ fun DashboardScreen(vm: DashboardViewModel) {
             onSelect = { vm.saveManualOverride(target.malId, it) },
             onClearOverride = { vm.clearManualOverride(target.malId) },
             onDismiss = vm::dismissMatchDialog,
+        )
+    }
+
+    // Detail bottom sheet
+    state.selectedEntry?.let { entry ->
+        AnimeDetailSheet(
+            entry = entry,
+            sonarrStats = state.sonarrStats[entry.tvdbId],
+            sonarrUrl = state.sonarrUrl,
+            hasManualOverride = state.manualOverrides.containsKey(entry.malId),
+            onFixMatch = { vm.openMatchDialog(entry); vm.dismissDetail() },
+            onClearOverride = { vm.clearManualOverride(entry.malId) },
+            onDismiss = vm::dismissDetail,
         )
     }
 
@@ -95,10 +109,6 @@ fun DashboardScreen(vm: DashboardViewModel) {
             )
 
             if (state.entries.isEmpty()) {
-                // Sync history if we have it but no entries
-                if (state.syncHistory.isNotEmpty()) {
-                    SyncHistorySection(history = state.syncHistory, modifier = Modifier.padding(16.dp))
-                }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Icon(Icons.Default.SyncAlt, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -117,12 +127,6 @@ fun DashboardScreen(vm: DashboardViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                // Sync history header (as a first full-width item shown at top)
-                if (state.syncHistory.isNotEmpty()) {
-                    item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                        SyncHistorySection(history = state.syncHistory.take(5))
-                    }
-                }
                 val displayEntries = vm.filteredEntries
                 items(displayEntries, key = { it.malId }) { entry ->
                     AnimeCard(
@@ -132,6 +136,7 @@ fun DashboardScreen(vm: DashboardViewModel) {
                         hasManualOverride = state.manualOverrides.containsKey(entry.malId),
                         onFixMatch = if (entry.syncStatus == SyncStatus.NOT_FOUND || entry.syncStatus == SyncStatus.ERROR)
                             { { vm.openMatchDialog(entry) } } else null,
+                        onClick = { vm.openDetail(entry) },
                     )
                 }
             }
@@ -219,54 +224,13 @@ private fun StatusFilterRow(
 }
 
 @Composable
-private fun SyncHistorySection(
-    history: List<SyncHistoryEntry>,
-    modifier: Modifier = Modifier,
-) {
-    val fmt = SimpleDateFormat("MMM d HH:mm", Locale.getDefault())
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Sync History", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            history.forEach { entry ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        fmt.format(Date(entry.timestampMs)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "${entry.syncedCount}/${entry.totalCount} synced" +
-                                if (entry.newlyAddedCount > 0) " (+${entry.newlyAddedCount} new)" else "",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    if (entry.errorCount > 0 || entry.notFoundCount > 0) {
-                        Text(
-                            "${entry.errorCount + entry.notFoundCount} issues",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun AnimeCard(
     entry: SyncEntry,
     isDark: Boolean,
     sonarrStats: SonarrSeries? = null,
     hasManualOverride: Boolean = false,
     onFixMatch: (() -> Unit)? = null,
+    onClick: () -> Unit = {},
 ) {
     val statusColor = when (entry.syncStatus) {
         SyncStatus.SYNCED -> if (isDark) StatusSyncedDark else StatusSynced
@@ -294,7 +258,7 @@ fun AnimeCard(
 
     Card(
         shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column {
@@ -425,6 +389,215 @@ fun AnimeCard(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AnimeDetailSheet(
+    entry: SyncEntry,
+    sonarrStats: SonarrSeries?,
+    sonarrUrl: String,
+    hasManualOverride: Boolean,
+    onFixMatch: () -> Unit,
+    onClearOverride: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    val isDark = isSystemInDarkTheme()
+
+    val statusColor = when (entry.syncStatus) {
+        SyncStatus.SYNCED -> if (isDark) StatusSyncedDark else StatusSynced
+        SyncStatus.NOT_FOUND -> if (isDark) StatusNotFoundDark else StatusNotFound
+        SyncStatus.ERROR -> if (isDark) StatusErrorDark else StatusError
+        SyncStatus.PENDING -> if (isDark) StatusPendingDark else StatusPending
+        SyncStatus.SKIPPED -> Color(0xFF7B5800)
+    }
+    val statusLabel = when (entry.syncStatus) {
+        SyncStatus.SYNCED -> "Synced"
+        SyncStatus.NOT_FOUND -> "Not Found"
+        SyncStatus.ERROR -> "Error"
+        SyncStatus.PENDING -> "Pending"
+        SyncStatus.SKIPPED -> "Skipped"
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Poster + basic info row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Card(
+                    shape = MaterialTheme.shapes.medium,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.width(110.dp).aspectRatio(3f / 4f),
+                ) {
+                    if (entry.imageUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = entry.imageUrl,
+                            contentDescription = entry.malTitle,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Tv, null, modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f).padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(entry.malTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (entry.tvdbTitle != null && entry.tvdbTitle != entry.malTitle) {
+                        Text("TVDB: ${entry.tvdbTitle}", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Surface(shape = MaterialTheme.shapes.small, color = statusColor.copy(alpha = 0.15f)) {
+                        Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = statusColor,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (entry.score > 0) {
+                            Text("★ ${entry.score}/10", style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFFFD600), fontWeight = FontWeight.SemiBold)
+                        }
+                        if (entry.numEpisodes > 0) {
+                            Text("${entry.numEpisodes} eps", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (entry.mediaType.isNotBlank() && entry.mediaType != "tv") {
+                            Text(entry.mediaType.uppercase(), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (entry.malStatus.isNotBlank()) {
+                        Text(
+                            "MAL: ${entry.malStatus.replace("_", " ").replaceFirstChar { it.uppercase() }}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            // Error message
+            if (entry.errorMessage != null) {
+                Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(16.dp))
+                        Text(entry.errorMessage, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer)
+                    }
+                }
+            }
+
+            // Manual override badge
+            if (hasManualOverride) {
+                Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("📌 Manual TVDB override active", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        TextButton(onClick = onClearOverride) { Text("Clear", style = MaterialTheme.typography.labelSmall) }
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            if (entry.syncStatus == SyncStatus.SYNCED && sonarrStats != null) {
+                // ── Sonarr download info ────────────────────────────────────────
+                Text("Sonarr", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+
+                if (sonarrStats.title.isNotBlank() && sonarrStats.title != entry.malTitle) {
+                    Text(sonarrStats.title, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                val pct = (sonarrStats.percentOfEpisodes / 100.0).coerceIn(0.0, 1.0).toFloat()
+                val progressColor = when {
+                    !sonarrStats.monitored -> MaterialTheme.colorScheme.outline
+                    pct >= 1f -> Color(0xFF2E7D32)
+                    pct > 0f -> MaterialTheme.colorScheme.primary
+                    else -> Color(0xFF7B5800)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("${sonarrStats.episodeFileCount} / ${sonarrStats.totalEpisodeCount} eps downloaded",
+                            style = MaterialTheme.typography.bodySmall)
+                        Text("${sonarrStats.percentOfEpisodes.toInt()}%", style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold, color = progressColor)
+                    }
+                    LinearProgressIndicator(
+                        progress = { pct },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = progressColor,
+                        trackColor = progressColor.copy(alpha = 0.15f),
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (sonarrStats.sonarrStatus.isNotBlank()) {
+                        DetailPill(sonarrStats.sonarrStatus.replaceFirstChar { it.uppercase() })
+                    }
+                    if (!sonarrStats.monitored) {
+                        DetailPill("Unmonitored", color = MaterialTheme.colorScheme.outline)
+                    } else {
+                        DetailPill("Monitored", color = Color(0xFF2E7D32))
+                    }
+                }
+
+                if (sonarrUrl.isNotBlank() && sonarrStats.titleSlug.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = { runCatching { uriHandler.openUri("$sonarrUrl/series/${sonarrStats.titleSlug}") } },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Open in Sonarr")
+                    }
+                }
+            } else if (entry.syncStatus == SyncStatus.NOT_FOUND || entry.syncStatus == SyncStatus.ERROR) {
+                Button(
+                    onClick = onFixMatch,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                ) {
+                    Icon(Icons.Default.Search, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Fix TVDB Match")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailPill(label: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    Surface(shape = MaterialTheme.shapes.small, color = color.copy(alpha = 0.12f)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
     }
 }
 

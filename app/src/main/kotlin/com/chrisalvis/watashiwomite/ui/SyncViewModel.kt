@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.chrisalvis.watashiwomite.data.AppPreferences
 import com.chrisalvis.watashiwomite.data.SonarrRepository
 import com.chrisalvis.watashiwomite.data.SonarrSeries
+import com.chrisalvis.watashiwomite.data.SyncHistoryEntry
 import com.chrisalvis.watashiwomite.data.SyncPreview
 import com.chrisalvis.watashiwomite.data.SyncRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +42,8 @@ data class SyncUiState(
     val previewProgress: String = "",
     val syncPreview: SyncPreview? = null,
     val showPreviewDialog: Boolean = false,
+    // Sync history
+    val syncHistory: List<SyncHistoryEntry> = emptyList(),
 )
 
 val MAL_STATUSES = listOf(
@@ -63,7 +66,8 @@ class SyncViewModel(private val context: Context) : ViewModel() {
     init {
         viewModelScope.launch {
             val statuses = prefs.syncStatuses.first()
-            _uiState.value = _uiState.value.copy(selectedStatuses = statuses)
+            val history = syncRepo.loadSyncHistory()
+            _uiState.value = _uiState.value.copy(selectedStatuses = statuses, syncHistory = history)
         }
     }
 
@@ -91,6 +95,7 @@ class SyncViewModel(private val context: Context) : ViewModel() {
 
             if (result.isSuccess) {
                 val data = result.getOrThrow()
+                val updatedHistory = syncRepo.loadSyncHistory()
                 _uiState.value = _uiState.value.copy(
                     isSyncing = false,
                     syncProgress = "",
@@ -103,6 +108,7 @@ class SyncViewModel(private val context: Context) : ViewModel() {
                     errorCount = data.errorCount,
                     notFoundCount = data.notFoundCount,
                     skippedCount = data.skippedCount,
+                    syncHistory = updatedHistory,
                 )
             } else {
                 _uiState.value = _uiState.value.copy(

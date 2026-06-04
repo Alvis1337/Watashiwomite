@@ -12,7 +12,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chrisalvis.watashiwomite.data.SyncHistoryEntry
 import com.chrisalvis.watashiwomite.data.SyncPreview
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
@@ -210,8 +213,12 @@ fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
                 }
             }
 
-            // ── Remove from Sonarr section ────────────────────────────────────
-            Card(
+            // ── Sync history ──────────────────────────────────────────────────
+            if (state.syncHistory.isNotEmpty()) {
+                SyncHistorySection(history = state.syncHistory)
+            }
+
+            // ── Remove from Sonarr section ────────────────────────────────────            Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = CardDefaults.outlinedCardBorder(),
@@ -463,5 +470,68 @@ private fun PreviewStatRow(label: String, value: Int, color: androidx.compose.ui
             fontWeight = FontWeight.Bold,
             color = color,
         )
+    }
+}
+
+@Composable
+private fun SyncHistorySection(
+    history: List<SyncHistoryEntry>,
+    modifier: Modifier = Modifier,
+) {
+    val fmt = SimpleDateFormat("MMM d HH:mm", Locale.getDefault())
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Sync History", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            history.forEach { entry ->
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            fmt.format(Date(entry.timestampMs)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "${entry.syncedCount}/${entry.totalCount} synced" +
+                                if (entry.newlyAddedCount > 0) " · +${entry.newlyAddedCount} new" else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    if (entry.errorCount > 0 || entry.notFoundCount > 0) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.errorContainer,
+                        ) {
+                            Text(
+                                "${entry.errorCount + entry.notFoundCount} issues",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            )
+                        }
+                    } else {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                        ) {
+                            Text(
+                                "✓ Clean",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

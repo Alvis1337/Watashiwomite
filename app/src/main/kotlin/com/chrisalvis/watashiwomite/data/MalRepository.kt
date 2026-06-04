@@ -174,8 +174,11 @@ class MalRepository(private val context: Context) {
                         val node = item.getJSONObject("node")
                         val malId = node.getInt("id")
                         val title = node.getString("title")
-                        val imageUrl = node.optJSONObject("main_picture")
-                            ?.optString("medium") ?: ""
+                        val pictureObj = node.optJSONObject("main_picture")
+                        val imageUrl = pictureObj?.let {
+                            it.optString("large").takeIf { s -> s.isNotBlank() }
+                                ?: it.optString("medium").takeIf { s -> s.isNotBlank() }
+                        } ?: ""
                         val mediaType = node.optString("media_type", "tv")
                         val numEpisodes = node.optInt("num_episodes", 0)
                         val listStatusObj = item.optJSONObject("list_status")

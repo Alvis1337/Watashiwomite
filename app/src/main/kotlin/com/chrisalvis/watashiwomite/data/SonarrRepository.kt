@@ -15,6 +15,7 @@ data class SonarrSeries(
     val id: Int,
     val tvdbId: Int,
     val title: String,
+    val titleSlug: String = "",
     val alternateTitles: List<String> = emptyList(),
     // Live stats from Sonarr (not persisted in SyncEntry cache)
     val episodeFileCount: Int = 0,
@@ -84,6 +85,7 @@ class SonarrRepository {
                         id = obj.getInt("id"),
                         tvdbId = obj.optInt("tvdbId", -1),
                         title = obj.getString("title"),
+                        titleSlug = obj.optString("titleSlug", ""),
                         alternateTitles = altTitles,
                         episodeFileCount = stats?.optInt("episodeFileCount", 0) ?: 0,
                         episodeCount = stats?.optInt("episodeCount", 0) ?: 0,
