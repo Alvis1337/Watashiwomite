@@ -68,8 +68,6 @@ fun SetupScreen(
                 when (step) {
                     SetupStep.MAL -> MalStep(
                         state = state,
-                        onClientIdChange = vm::setMalClientId,
-                        onClientSecretChange = vm::setMalClientSecret,
                         onLogin = { vm.generateAuthUrl() },
                         onNext = { vm.goToStep(SetupStep.SONARR) },
                     )
@@ -202,17 +200,13 @@ private fun StepCard(
 @Composable
 private fun MalStep(
     state: SetupUiState,
-    onClientIdChange: (String) -> Unit,
-    onClientSecretChange: (String) -> Unit,
     onLogin: () -> Unit,
     onNext: () -> Unit,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var showSecret by remember { mutableStateOf(false) }
     StepCard(
         icon = Icons.Default.Person,
         title = "Connect MyAnimeList",
-        subtitle = "Authorize the app to read your anime list using OAuth 2.0. Your credentials are never stored on any server.",
+        subtitle = "Authorize the app to read your anime list.",
     ) {
         // Loading state while exchange is in progress
         if (state.malCallbackLoading) {
@@ -272,73 +266,9 @@ private fun MalStep(
                 }
             }
         } else if (!state.malCallbackLoading) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Required: register this redirect URI", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            "watashiwomite://callback",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
-                    }
-                    Text(
-                        "Go to myanimelist.net/apiconfig → edit your app → paste this into \"App Redirect URL\" → Save.\n\n" +
-                        "You can use the same app as rotato — just add this URI alongside rotato://callback.\n\n" +
-                        "⚠ Rotato's credentials will NOT work until you add this URI to rotato's app.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    OutlinedButton(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://myanimelist.net/apiconfig"))
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Open MAL API Config")
-                    }
-                    HorizontalDivider()
-                    Text("Then enter your Client ID here:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            OutlinedTextField(
-                value = state.malClientId,
-                onValueChange = onClientIdChange,
-                label = { Text("MAL Client ID") },
-                leadingIcon = { Icon(Icons.Default.Key, null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = state.malClientSecret,
-                onValueChange = onClientSecretChange,
-                label = { Text("MAL Client Secret (optional)") },
-                leadingIcon = { Icon(Icons.Default.Lock, null) },
-                trailingIcon = {
-                    IconButton(onClick = { showSecret = !showSecret }) {
-                        Icon(if (showSecret) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-                    }
-                },
-                visualTransformation = if (showSecret) VisualTransformation.None else PasswordVisualTransformation(),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
             Button(
                 onClick = onLogin,
-                enabled = state.malClientId.isNotBlank() && !state.isGeneratingAuthUrl,
+                enabled = !state.isGeneratingAuthUrl,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (state.isGeneratingAuthUrl) {
