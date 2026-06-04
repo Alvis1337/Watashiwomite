@@ -218,7 +218,8 @@ fun SyncScreen(vm: SyncViewModel, onSyncComplete: () -> Unit) {
                 SyncHistorySection(history = state.syncHistory)
             }
 
-            // ── Remove from Sonarr section ────────────────────────────────────            Card(
+            // ── Remove from Sonarr section ────────────────────────────────────
+            Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = CardDefaults.outlinedCardBorder(),
