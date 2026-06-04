@@ -277,7 +277,7 @@ private fun MalStep(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Step 1: Add this redirect URI to your MAL API app", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("Required: register this redirect URI", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         shape = MaterialTheme.shapes.small,
@@ -291,7 +291,9 @@ private fun MalStep(
                         )
                     }
                     Text(
-                        "This is separate from rotato://callback — go to myanimelist.net/apiconfig, edit your app, and add it alongside the existing one.",
+                        "Go to myanimelist.net/apiconfig → edit your app → paste this into \"App Redirect URL\" → Save.\n\n" +
+                        "You can use the same app as rotato — just add this URI alongside rotato://callback.\n\n" +
+                        "⚠ Rotato's credentials will NOT work until you add this URI to rotato's app.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -307,7 +309,7 @@ private fun MalStep(
                         Text("Open MAL API Config")
                     }
                     HorizontalDivider()
-                    Text("Step 2: Enter your Client ID below", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("Then enter your Client ID here:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
 

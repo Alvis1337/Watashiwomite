@@ -62,8 +62,9 @@ class MalRepository(private val context: Context) {
     suspend fun exchangeCode(code: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val verifier = prefs.malCodeVerifier.first()
-            check(verifier.isNotBlank()) { "No code verifier stored" }
+            check(verifier.isNotBlank()) { "No code verifier stored — please restart the login flow" }
             val clientId = prefs.malClientId.first().ifBlank { BuildConfig.MAL_CLIENT_ID }
+            check(clientId.isNotBlank()) { "No Client ID saved — re-enter your MAL Client ID and try again" }
             val clientSecret = prefs.malClientSecret.first().ifBlank { BuildConfig.MAL_CLIENT_SECRET }
 
             val bodyBuilder = FormBody.Builder()
@@ -82,9 +83,21 @@ class MalRepository(private val context: Context) {
                 .build()
 
             http.newCall(req).execute().use { resp ->
-                val body = resp.body?.string()
-                check(resp.isSuccessful) { "Token exchange failed: ${resp.code} $body" }
-                val json = JSONObject(body ?: throw IOException("Empty token response"))
+                val body = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    val hint = when {
+                        resp.code == 401 || body.contains("invalid_client") ->
+                            "MAL rejected the app credentials.\n\n" +
+                            "Most likely: \"$REDIRECT_URI\" is not registered for client \"$clientId\".\n\n" +
+                            "Fix: go to myanimelist.net/apiconfig, edit your app, and add this EXACT redirect URI:\n$REDIRECT_URI\n\n" +
+                            "Note: rotato's credentials won't work here unless you add the above URI to rotato's app too."
+                        body.contains("invalid_grant") ->
+                            "Authorization code expired or already used — tap Login again."
+                        else -> "Token exchange failed (${resp.code}): $body"
+                    }
+                    error(hint)
+                }
+                val json = JSONObject(body)
                 val accessToken = json.getString("access_token")
                 val refreshToken = json.getString("refresh_token")
                 val username = runCatching { fetchUsername(accessToken) }.getOrDefault("")
