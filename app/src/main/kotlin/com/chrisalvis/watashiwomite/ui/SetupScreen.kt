@@ -206,6 +206,7 @@ private fun MalStep(
     onLogin: () -> Unit,
     onNext: () -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showSecret by remember { mutableStateOf(false) }
     StepCard(
         icon = Icons.Default.Person,
@@ -260,7 +261,7 @@ private fun MalStep(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Open MAL API Config")
                     }
