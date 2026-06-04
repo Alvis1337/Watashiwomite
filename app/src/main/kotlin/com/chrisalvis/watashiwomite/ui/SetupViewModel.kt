@@ -87,6 +87,17 @@ class SetupViewModel(private val context: Context) : ViewModel() {
         _uiState.value = _uiState.value.copy(malIsLoggedIn = true, malUsername = username)
     }
 
+    fun handleMalCallback(code: String) {
+        viewModelScope.launch {
+            val repo = com.chrisalvis.watashiwomite.data.MalRepository(context)
+            val result = repo.exchangeCode(code)
+            if (result.isSuccess) {
+                val username = prefs.malUsername.first()
+                _uiState.value = _uiState.value.copy(malIsLoggedIn = true, malUsername = username)
+            }
+        }
+    }
+
     fun setSonarrUrl(url: String) {
         _uiState.value = _uiState.value.copy(sonarrUrl = url, sonarrTestResult = null, sonarrTestSuccess = null)
     }

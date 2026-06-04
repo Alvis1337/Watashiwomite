@@ -23,31 +23,38 @@ import androidx.navigation.compose.rememberNavController
 import com.chrisalvis.watashiwomite.data.AppPreferences
 import com.chrisalvis.watashiwomite.ui.*
 import com.chrisalvis.watashiwomite.ui.theme.WomiTheme
-import kotlinx.coroutines.flow.first
 
 class MainActivity : AppCompatActivity() {
 
-    private var pendingMalCode: String? = null
+    // Compose-observable state — onNewIntent can set this and Compose will react
+    private val _pendingMalCode = mutableStateOf<String?>(null)
+
+    // Direct ViewModel ref so onNewIntent can dispatch immediately (mirrors rotato)
+    private lateinit var setupVmRef: SetupViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        pendingMalCode = extractMalCode(intent)
+        _pendingMalCode.value = extractMalCode(intent)
         setContent { WomiApp() }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingMalCode = extractMalCode(intent)
+        val code = extractMalCode(intent) ?: return
+        if (::setupVmRef.isInitialized) {
+            setupVmRef.handleMalCallback(code)
+        } else {
+            _pendingMalCode.value = code
+        }
     }
 
     private fun extractMalCode(intent: Intent): String? {
         val uri = intent.data ?: return null
-        if (uri.scheme == "watashiwomite" && uri.host == "callback") {
-            return uri.getQueryParameter("code")
-        }
-        return null
+        return if (uri.scheme == "watashiwomite" && uri.host == "callback")
+            uri.getQueryParameter("code")
+        else null
     }
 
     @Composable
@@ -69,8 +76,7 @@ class MainActivity : AppCompatActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Icon(
-                            Icons.Default.SyncAlt,
-                            null,
+                            Icons.Default.SyncAlt, null,
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
@@ -84,22 +90,20 @@ class MainActivity : AppCompatActivity() {
             val navBackStack by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStack?.destination?.route
 
-            // ViewModels — created once and shared via remember
             val setupVm = remember { SetupViewModel(context) }
             val dashboardVm = remember { DashboardViewModel(context) }
             val syncVm = remember { SyncViewModel(context) }
             val settingsVm = remember { SettingsViewModel(context) }
 
-            // Handle MAL OAuth callback from deep-link
-            LaunchedEffect(pendingMalCode) {
-                val code = pendingMalCode ?: return@LaunchedEffect
-                pendingMalCode = null
-                val malRepo = com.chrisalvis.watashiwomite.data.MalRepository(context)
-                val result = malRepo.exchangeCode(code)
-                if (result.isSuccess) {
-                val username = prefs.malUsername.first()
-                    setupVm.onMalLoggedIn(username)
-                }
+            // Assign ref so onNewIntent can dispatch directly (same as rotato's malViewModelRef)
+            setupVmRef = setupVm
+
+            // Drain any code that arrived before the ViewModel was ready
+            val pendingCode = _pendingMalCode.value
+            LaunchedEffect(pendingCode) {
+                val code = pendingCode ?: return@LaunchedEffect
+                _pendingMalCode.value = null
+                setupVm.handleMalCallback(code)
             }
 
             val selectedTab = when (currentRoute) {
@@ -108,7 +112,6 @@ class MainActivity : AppCompatActivity() {
                 "settings" -> 2
                 else -> 0
             }
-
             val showBottomBar = currentRoute in setOf("dashboard", "sync", "settings")
 
             Scaffold(
@@ -172,9 +175,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         )
                     }
-                    composable("dashboard") {
-                        DashboardScreen(vm = dashboardVm)
-                    }
+                    composable("dashboard") { DashboardScreen(vm = dashboardVm) }
                     composable("sync") {
                         SyncScreen(
                             vm = syncVm,

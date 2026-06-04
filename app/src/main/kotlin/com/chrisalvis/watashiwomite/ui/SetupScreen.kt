@@ -234,9 +234,8 @@ private fun MalStep(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("At myanimelist.net/apiconfig, edit your app and add this exact redirect URI:", style = MaterialTheme.typography.labelMedium)
-                    Spacer(Modifier.height(2.dp))
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Step 1: Add this redirect URI to your MAL API app", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         shape = MaterialTheme.shapes.small,
@@ -249,12 +248,24 @@ private fun MalStep(
                             modifier = androidx.compose.ui.Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         )
                     }
-                    Spacer(Modifier.height(2.dp))
                     Text(
-                        "This is different from rotato://callback — both can coexist in the same app.",
+                        "This is separate from rotato://callback — go to myanimelist.net/apiconfig, edit your app, and add it alongside the existing one.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    OutlinedButton(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://myanimelist.net/apiconfig"))
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Open MAL API Config")
+                    }
+                    HorizontalDivider()
+                    Text("Step 2: Enter your Client ID below", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
 
