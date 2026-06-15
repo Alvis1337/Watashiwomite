@@ -258,12 +258,15 @@ class DashboardViewModel(private val context: Context) : ViewModel() {
             val result = sonarrRepo.setSeasonMonitored(url, apiKey, sonarrId, seasonNumber, newMonitored)
             if (result.isSuccess) {
                 val updatedStats = _uiState.value.sonarrStats.toMutableMap()
-                updatedStats[entry.tvdbId]?.let { series ->
-                    updatedStats[entry.tvdbId] = series.copy(
-                        seasons = series.seasons.map { s ->
-                            if (s.seasonNumber == seasonNumber) s.copy(monitored = newMonitored) else s
-                        }
-                    )
+                val tvdbId = entry.tvdbId
+                if (tvdbId != null) {
+                    updatedStats[tvdbId]?.let { series ->
+                        updatedStats[tvdbId] = series.copy(
+                            seasons = series.seasons.map { s ->
+                                if (s.seasonNumber == seasonNumber) s.copy(monitored = newMonitored) else s
+                            }
+                        )
+                    }
                 }
                 _uiState.value = _uiState.value.copy(
                     sonarrStats = updatedStats,
