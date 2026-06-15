@@ -35,6 +35,7 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(vm: DashboardViewModel) {
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -197,7 +198,6 @@ fun DashboardScreen(vm: DashboardViewModel) {
                 return@Scaffold
             }
 
-            @OptIn(ExperimentalMaterial3Api::class)
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,
                 onRefresh = vm::quickSync,
