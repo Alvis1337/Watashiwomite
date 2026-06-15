@@ -31,6 +31,7 @@ import com.chrisalvis.watashiwomite.data.SyncEntry
 import com.chrisalvis.watashiwomite.data.SyncStatus
 import com.chrisalvis.watashiwomite.data.TvdbSeriesResult
 import com.chrisalvis.watashiwomite.ui.theme.*
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -54,6 +55,15 @@ fun DashboardScreen(vm: DashboardViewModel) {
         )
     }
 
+    // Toast feedback
+    val toastMessage = state.toastMessage
+    LaunchedEffect(toastMessage) {
+        if (toastMessage != null) {
+            delay(2500)
+            vm.clearToast()
+        }
+    }
+
     // Detail bottom sheet
     state.selectedEntry?.let { entry ->
         AnimeDetailSheet(
@@ -61,10 +71,34 @@ fun DashboardScreen(vm: DashboardViewModel) {
             sonarrStats = state.sonarrStats[entry.tvdbId],
             sonarrUrl = state.sonarrUrl,
             hasManualOverride = state.manualOverrides.containsKey(entry.malId),
+            actionInProgress = state.actionInProgress == entry.malId,
             onFixMatch = { vm.openMatchDialog(entry); vm.dismissDetail() },
             onClearOverride = { vm.clearManualOverride(entry.malId) },
+            onToggleMonitoring = { vm.toggleMonitoring(entry) },
+            onChangeMalStatus = { vm.updateMalStatus(entry, it) },
             onDismiss = vm::dismissDetail,
         )
+    }
+
+    // Toast overlay
+    if (toastMessage != null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Surface(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 80.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.inverseSurface,
+                tonalElevation = 6.dp,
+            ) {
+                Text(
+                    toastMessage,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                )
+            }
+        }
     }
 
     Scaffold(
@@ -75,7 +109,27 @@ fun DashboardScreen(vm: DashboardViewModel) {
                     containerColor = MaterialTheme.colorScheme.background,
                 )
             )
-        }
+        },
+        floatingActionButton = {
+            if (!state.isLoading) {
+                FloatingActionButton(
+                    onClick = vm::quickSync,
+                    containerColor = if (state.isSyncing)
+                        MaterialTheme.colorScheme.surfaceVariant
+                    else MaterialTheme.colorScheme.primary,
+                ) {
+                    if (state.isSyncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Icon(Icons.Default.Sync, contentDescription = "Sync now")
+                    }
+                }
+            }
+        },
     ) { padding ->
         if (state.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -100,10 +154,33 @@ fun DashboardScreen(vm: DashboardViewModel) {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
+            // Search bar
+            OutlinedTextField(
+                value = state.searchQuery,
+                onValueChange = vm::setSearchQuery,
+                placeholder = { Text("Search anime…") },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = {
+                    if (state.searchQuery.isNotBlank()) {
+                        IconButton(onClick = { vm.setSearchQuery("") }) {
+                            Icon(Icons.Default.Clear, null)
+                        }
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.large,
+            )
+
             // Filter chips
             StatusFilterRow(
                 selected = state.filterStatus,
+                filterNeedsAttention = state.filterNeedsAttention,
+                needsAttentionCount = state.needsAttentionCount,
                 onSelect = vm::setFilter,
+                onToggleNeedsAttention = { vm.setFilterNeedsAttention(!state.filterNeedsAttention) },
                 hasSkipped = state.skippedCount > 0,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
@@ -120,24 +197,31 @@ fun DashboardScreen(vm: DashboardViewModel) {
                 return@Scaffold
             }
 
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 160.dp),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            @OptIn(ExperimentalMaterial3Api::class)
+            PullToRefreshBox(
+                isRefreshing = state.isSyncing,
+                onRefresh = vm::quickSync,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                val displayEntries = vm.filteredEntries
-                items(displayEntries, key = { it.malId }) { entry ->
-                    AnimeCard(
-                        entry = entry,
-                        isDark = isDark,
-                        sonarrStats = state.sonarrStats[entry.tvdbId],
-                        hasManualOverride = state.manualOverrides.containsKey(entry.malId),
-                        onFixMatch = if (entry.syncStatus == SyncStatus.NOT_FOUND || entry.syncStatus == SyncStatus.ERROR)
-                            { { vm.openMatchDialog(entry) } } else null,
-                        onClick = { vm.openDetail(entry) },
-                    )
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 160.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    val displayEntries = vm.filteredEntries
+                    items(displayEntries, key = { it.malId }) { entry ->
+                        AnimeCard(
+                            entry = entry,
+                            isDark = isDark,
+                            sonarrStats = state.sonarrStats[entry.tvdbId],
+                            hasManualOverride = state.manualOverrides.containsKey(entry.malId),
+                            onFixMatch = if (entry.syncStatus == SyncStatus.NOT_FOUND || entry.syncStatus == SyncStatus.ERROR)
+                                { { vm.openMatchDialog(entry) } } else null,
+                            onClick = { vm.openDetail(entry) },
+                        )
+                    }
                 }
             }
         }
@@ -205,7 +289,10 @@ private fun StatChip(label: String, value: Int, color: Color, modifier: Modifier
 @Composable
 private fun StatusFilterRow(
     selected: SyncStatus?,
+    filterNeedsAttention: Boolean,
+    needsAttentionCount: Int,
     onSelect: (SyncStatus?) -> Unit,
+    onToggleNeedsAttention: () -> Unit,
     hasSkipped: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -213,12 +300,41 @@ private fun StatusFilterRow(
         modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text("All") })
-        FilterChip(selected = selected == SyncStatus.SYNCED, onClick = { onSelect(SyncStatus.SYNCED) }, label = { Text("Synced") })
-        FilterChip(selected = selected == SyncStatus.ERROR, onClick = { onSelect(SyncStatus.ERROR) }, label = { Text("Errors") })
-        FilterChip(selected = selected == SyncStatus.NOT_FOUND, onClick = { onSelect(SyncStatus.NOT_FOUND) }, label = { Text("Not Found") })
+        FilterChip(
+            selected = selected == null && !filterNeedsAttention,
+            onClick = { onSelect(null); if (filterNeedsAttention) onToggleNeedsAttention() },
+            label = { Text("All") },
+        )
+        if (needsAttentionCount > 0) {
+            FilterChip(
+                selected = filterNeedsAttention,
+                onClick = onToggleNeedsAttention,
+                label = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Needs Attention")
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = if (filterNeedsAttention) MaterialTheme.colorScheme.onSecondaryContainer
+                            else MaterialTheme.colorScheme.error,
+                        ) {
+                            Text(
+                                "$needsAttentionCount",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (filterNeedsAttention) MaterialTheme.colorScheme.secondaryContainer
+                                else MaterialTheme.colorScheme.onError,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
+                },
+                leadingIcon = { Icon(Icons.Default.Warning, null, modifier = Modifier.size(16.dp)) },
+            )
+        }
+        FilterChip(selected = selected == SyncStatus.SYNCED && !filterNeedsAttention, onClick = { onSelect(SyncStatus.SYNCED) }, label = { Text("Synced") })
+        FilterChip(selected = selected == SyncStatus.ERROR && !filterNeedsAttention, onClick = { onSelect(SyncStatus.ERROR) }, label = { Text("Errors") })
+        FilterChip(selected = selected == SyncStatus.NOT_FOUND && !filterNeedsAttention, onClick = { onSelect(SyncStatus.NOT_FOUND) }, label = { Text("Not Found") })
         if (hasSkipped) {
-            FilterChip(selected = selected == SyncStatus.SKIPPED, onClick = { onSelect(SyncStatus.SKIPPED) }, label = { Text("Skipped") })
+            FilterChip(selected = selected == SyncStatus.SKIPPED && !filterNeedsAttention, onClick = { onSelect(SyncStatus.SKIPPED) }, label = { Text("Skipped") })
         }
     }
 }
@@ -399,8 +515,11 @@ private fun AnimeDetailSheet(
     sonarrStats: SonarrSeries?,
     sonarrUrl: String,
     hasManualOverride: Boolean,
+    actionInProgress: Boolean,
     onFixMatch: () -> Unit,
     onClearOverride: () -> Unit,
+    onToggleMonitoring: () -> Unit,
+    onChangeMalStatus: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
@@ -486,12 +605,34 @@ private fun AnimeDetailSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                    // MAL status chip row
                     if (entry.malStatus.isNotBlank()) {
+                        val malStatuses = listOf(
+                            "watching" to "Watching",
+                            "completed" to "Completed",
+                            "on_hold" to "On Hold",
+                            "dropped" to "Dropped",
+                            "plan_to_watch" to "Plan to Watch",
+                        )
                         Text(
-                            "MAL: ${entry.malStatus.replace("_", " ").replaceFirstChar { it.uppercase() }}",
-                            style = MaterialTheme.typography.bodySmall,
+                            "MAL Status",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            malStatuses.forEach { (value, label) ->
+                                val selected = entry.malStatus == value
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { if (!actionInProgress) onChangeMalStatus(value) },
+                                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                    enabled = !actionInProgress,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -560,10 +701,31 @@ private fun AnimeDetailSheet(
                     if (sonarrStats.sonarrStatus.isNotBlank()) {
                         DetailPill(sonarrStats.sonarrStatus.replaceFirstChar { it.uppercase() })
                     }
-                    if (!sonarrStats.monitored) {
-                        DetailPill("Unmonitored", color = MaterialTheme.colorScheme.outline)
+                }
+
+                // Monitoring toggle
+                val isMonitored = entry.monitored
+                OutlinedButton(
+                    onClick = onToggleMonitoring,
+                    enabled = !actionInProgress,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = if (isMonitored) MaterialTheme.colorScheme.error
+                        else Color(0xFF2E7D32),
+                    ),
+                ) {
+                    if (actionInProgress) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Updating…")
+                    } else if (isMonitored) {
+                        Icon(Icons.Default.VisibilityOff, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Unmonitor in Sonarr")
                     } else {
-                        DetailPill("Monitored", color = Color(0xFF2E7D32))
+                        Icon(Icons.Default.Visibility, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Monitor in Sonarr")
                     }
                 }
 

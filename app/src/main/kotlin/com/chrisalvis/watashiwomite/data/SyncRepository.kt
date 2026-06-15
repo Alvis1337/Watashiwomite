@@ -20,6 +20,7 @@ data class SyncEntry(
     val mediaType: String = "tv",
     val score: Int = 0,
     val numEpisodes: Int = 0,
+    val monitored: Boolean = true,
 )
 
 data class SyncHistoryEntry(
@@ -65,6 +66,7 @@ fun SyncEntry.toJson(): JSONObject = JSONObject().apply {
     put("mediaType", mediaType)
     put("score", score)
     put("numEpisodes", numEpisodes)
+    put("monitored", monitored)
 }
 
 fun JSONObject.toSyncEntry(): SyncEntry = SyncEntry(
@@ -80,6 +82,7 @@ fun JSONObject.toSyncEntry(): SyncEntry = SyncEntry(
     mediaType = optString("mediaType", "tv"),
     score = optInt("score", 0),
     numEpisodes = optInt("numEpisodes", 0),
+    monitored = optBoolean("monitored", true),
 )
 
 /** Determine Sonarr monitoring string from MAL user score & configured thresholds. */
@@ -273,6 +276,7 @@ class SyncRepository(private val context: Context) {
                     imageUrl = anime.imageUrl, tvdbId = tvdb.tvdbId, tvdbTitle = tvdb.name,
                     sonarrId = existingSonarr.id, syncStatus = SyncStatus.SYNCED, errorMessage = null,
                     mediaType = anime.mediaType, score = anime.score, numEpisodes = anime.numEpisodes,
+                    monitored = existingSonarr.monitored,
                 ))
                 syncedCount++
                 continue
@@ -451,6 +455,14 @@ class SyncRepository(private val context: Context) {
             sonarrRepo.removeSeries(sonarrUrl, sonarrApiKey, id, deleteFiles).onSuccess { removed++ }
         }
         removed
+    }
+
+    /** Replace a single cached entry (matched by malId) and persist. */
+    suspend fun updateCachedEntry(updated: SyncEntry) {
+        val current = loadCachedSyncData().toMutableList()
+        val idx = current.indexOfFirst { it.malId == updated.malId }
+        if (idx != -1) current[idx] = updated else current.add(updated)
+        saveSyncData(current)
     }
 
     fun computeStats(entries: List<SyncEntry>) = SyncResult(
