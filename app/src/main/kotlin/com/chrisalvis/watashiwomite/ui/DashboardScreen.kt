@@ -77,6 +77,7 @@ fun DashboardScreen(vm: DashboardViewModel) {
             onFixMatch = { vm.openMatchDialog(entry); vm.dismissDetail() },
             onClearOverride = { vm.clearManualOverride(entry.malId) },
             onToggleMonitoring = { vm.toggleMonitoring(entry) },
+            onToggleSeasonMonitoring = { seasonNum, currentMonitored -> vm.toggleSeasonMonitoring(entry, seasonNum, currentMonitored) },
             onChangeMalStatus = { vm.updateMalStatus(entry, it) },
             onDismiss = vm::dismissDetail,
         )
@@ -520,6 +521,7 @@ private fun AnimeDetailSheet(
     onFixMatch: () -> Unit,
     onClearOverride: () -> Unit,
     onToggleMonitoring: () -> Unit,
+    onToggleSeasonMonitoring: (seasonNumber: Int, currentlyMonitored: Boolean) -> Unit,
     onChangeMalStatus: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -676,31 +678,53 @@ private fun AnimeDetailSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
-                val pct = (sonarrStats.percentOfEpisodes / 100.0).coerceIn(0.0, 1.0).toFloat()
-                val progressColor = when {
-                    !sonarrStats.monitored -> MaterialTheme.colorScheme.outline
-                    pct >= 1f -> Color(0xFF2E7D32)
-                    pct > 0f -> MaterialTheme.colorScheme.primary
-                    else -> Color(0xFF7B5800)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("${sonarrStats.episodeFileCount} / ${sonarrStats.totalEpisodeCount} eps downloaded",
-                            style = MaterialTheme.typography.bodySmall)
-                        Text("${sonarrStats.percentOfEpisodes.toInt()}%", style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold, color = progressColor)
-                    }
-                    LinearProgressIndicator(
-                        progress = { pct },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = progressColor,
-                        trackColor = progressColor.copy(alpha = 0.15f),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${sonarrStats.episodeFileCount} files in Sonarr",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (sonarrStats.sonarrStatus.isNotBlank()) {
                         DetailPill(sonarrStats.sonarrStatus.replaceFirstChar { it.uppercase() })
+                    }
+                }
+
+                // Per-season monitoring toggles
+                if (sonarrStats.seasons.isNotEmpty()) {
+                    Text("Seasons", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp))
+                    sonarrStats.seasons.forEach { season ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text(
+                                    "Season ${season.seasonNumber}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                if (season.totalEpisodeCount > 0) {
+                                    Text(
+                                        "${season.episodeFileCount}/${season.totalEpisodeCount} files",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Switch(
+                                checked = season.monitored,
+                                onCheckedChange = {
+                                    if (!actionInProgress) onToggleSeasonMonitoring(season.seasonNumber, season.monitored)
+                                },
+                                enabled = !actionInProgress,
+                            )
+                        }
                     }
                 }
 

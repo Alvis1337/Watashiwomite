@@ -62,12 +62,20 @@ data class MalUpdateStatusResponse(
 data class SonarrStatusResponse(val version: String = "")
 
 @Serializable
+data class SonarrSeasonItem(
+    val seasonNumber: Int = 0,
+    val monitored: Boolean = false,
+    val statistics: SonarrStatisticsResponse? = null,
+)
+
+@Serializable
 data class SonarrSeriesListItem(
     val id: Int = 0,
     val tvdbId: Int = -1,
     val title: String = "",
     val titleSlug: String = "",
     val alternateTitles: List<SonarrAltTitle> = emptyList(),
+    val seasons: List<SonarrSeasonItem> = emptyList(),
     val statistics: SonarrStatisticsResponse? = null,
     val monitored: Boolean = true,
     val status: String = "",

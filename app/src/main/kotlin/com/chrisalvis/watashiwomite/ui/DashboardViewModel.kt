@@ -246,6 +246,39 @@ class DashboardViewModel(private val context: Context) : ViewModel() {
         }
     }
 
+    // ── Sonarr season monitoring toggle ───────────────────────────────────────
+
+    fun toggleSeasonMonitoring(entry: SyncEntry, seasonNumber: Int, currentlyMonitored: Boolean) {
+        val sonarrId = entry.sonarrId ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(actionInProgress = entry.malId)
+            val url = prefs.sonarrUrl.first()
+            val apiKey = prefs.sonarrApiKey.first()
+            val newMonitored = !currentlyMonitored
+            val result = sonarrRepo.setSeasonMonitored(url, apiKey, sonarrId, seasonNumber, newMonitored)
+            if (result.isSuccess) {
+                val updatedStats = _uiState.value.sonarrStats.toMutableMap()
+                updatedStats[entry.tvdbId]?.let { series ->
+                    updatedStats[entry.tvdbId] = series.copy(
+                        seasons = series.seasons.map { s ->
+                            if (s.seasonNumber == seasonNumber) s.copy(monitored = newMonitored) else s
+                        }
+                    )
+                }
+                _uiState.value = _uiState.value.copy(
+                    sonarrStats = updatedStats,
+                    actionInProgress = null,
+                    toastMessage = if (newMonitored) "Season $seasonNumber monitoring enabled" else "Season $seasonNumber monitoring disabled",
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    actionInProgress = null,
+                    toastMessage = "Failed: ${result.exceptionOrNull()?.message}",
+                )
+            }
+        }
+    }
+
     // ── MAL list status update ─────────────────────────────────────────────────
 
     fun updateMalStatus(entry: SyncEntry, newStatus: String) {
